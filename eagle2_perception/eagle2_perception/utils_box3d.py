@@ -1,15 +1,100 @@
-# copied from https://github.com/cersar/3D_detection
+# original version https://github.com/cersar/3D_detection
 
+import time
 import cv2
 import numpy as np
 
 
+# Indicies for 8 specific cases.
+# - R/L means object on the right or left of the image
+# - 0/90/180/270 means object yaw range
+# These numbers were computed from 1024 possible constrainer cases.
+# Main problem was performance as computation even for 256 cases
+# was taking 50ms on core i5.
+IND_R0 = [
+  [4,0,1,2],
+  [4,0,3,2],
+  [4,0,7,0],
+  [4,0,7,2],
+  [4,0,7,4],
+  [4,0,7,6],
+  [4,2,1,2],
+  [4,2,7,2],
+  [6,2,1,2],
+  [6,2,7,2],
+]
+IND_R90 = [
+  [2,0,5,2],
+  [2,0,5,6],
+  [2,6,5,0],
+  [2,6,5,6],
+  [4,0,5,4],
+  [4,0,5,6],
+]
+IND_R180 = [
+  [0,4,3,0],
+  [0,4,3,2],
+  [0,4,3,4],
+  [0,4,3,6],
+  [0,4,5,6],
+  [0,4,7,6],
+  [0,6,3,0],
+  [0,6,3,6],
+  [2,6,3,0],
+  [2,6,3,6],
+]
+IND_R270 = [
+  [0,4,1,0],
+  [0,4,1,2],
+  [6,2,1,2],
+  [6,2,1,4],
+  [6,4,1,2],
+  [6,4,1,6],
+]
+IND_L0 = [
+  [2,0,7,0],
+  [2,0,7,4],
+  [2,6,7,4],
+  [2,6,7,6],
+  [4,0,1,2],
+  [4,0,3,2],
+  [4,0,7,2],
+  [4,0,7,4],
+]
+IND_L90 = [
+  [0,4,1,0],
+  [0,4,5,0],
+  [0,4,5,6],
+  [0,6,5,0],
+  [2,6,5,0],
+  [2,6,5,2],
+  [2,6,5,4],
+  [2,6,5,6],
+]
+IND_L180 = [
+  [0,4,3,0],
+  [0,4,3,6],
+  [0,4,7,6],
+  [6,2,3,0],
+  [6,2,3,2],
+  [6,4,3,0],
+  [6,4,3,4],
+]
+IND_L270 = [
+  [4,0,1,2],
+  [4,0,1,4],
+  [4,0,5,4],
+  [4,2,1,4],
+  [6,2,1,0],
+  [6,2,1,2],
+  [6,2,1,4],
+  [6,2,1,6],
+]
+
+COCO_TO_VOC = {2:0,5:1,7:2,0:3,1:5,6:6}
+
 def compute_yaw(prediction, xmin, xmax, fx, u0):
-    box2d_center_x = (xmin + xmax) / 2.0
-    # Transfer arctan() from (-pi/2,pi/2) to (0,pi)
-    theta_ray = np.arctan(fx /(box2d_center_x - u0))
-    if theta_ray<0:
-        theta_ray = theta_ray+np.pi
+    theta_ray = np.arctan2(fx, ((xmin + xmax) / 2.0 - u0))
     max_anc = np.argmax(prediction[2][0])
     anchors = prediction[1][0][max_anc]
     if anchors[1] > 0:
@@ -22,19 +107,7 @@ def compute_yaw(prediction, xmin, xmax, fx, u0):
     theta = theta_loc + theta_ray
     # object's yaw angle
     yaw = np.pi/2 - theta
-    return yaw
-
-
-# Just consider 256 situations.
-# There are some jobs to do to reduce situations to 64 according to the paper.
-inds = []
-indx = [1, 3, 5, 7]
-indy = [0, 1, 2, 3]
-for i in indx:
-    for j in indx:
-        for m in indy:
-            for n in indy:
-                inds.append([i, j, m, n])
+    return yaw, theta_ray
 
 
 def init_points3D(dims):
@@ -75,19 +148,18 @@ def compute_error(points3D,center,rot_M, cam_to_img,box_2D):
                   np.min(points2D[:,1]),
                   np.max(points2D[:,1])]).reshape((-1,1))
     error = np.sum(np.abs(new_box_2D - box_2D))
-
     return error
 
 
-def compute_center(points3D,rot_M,cam_to_img,box_2D,inds):
+def compute_center(points3D,rot_M,cam_to_img,box_2D, inds):
     fx = cam_to_img[0][0]
     fy = cam_to_img[1][1]
     u0 = cam_to_img[0][2]
     v0 = cam_to_img[1][2]
-    W = np.array([[fx, 0, u0 - box_2D[0]],
-                  [fx, 0, u0 - box_2D[2]],
-                  [0, fy, v0 - box_2D[1]],
-                  [0, fy, v0 - box_2D[3]]])
+    W = np.array([[fx, 0, float(u0 - box_2D[0])],
+                  [fx, 0, float(u0 - box_2D[2])],
+                  [0, fy, float(v0 - box_2D[1])],
+                  [0, fy, float(v0 - box_2D[3])]])
     center =None
     error_min = 1e10
 
@@ -126,21 +198,54 @@ def draw_2D_box(image,points):
     cv2.rectangle(image,tuple(points[0:2]),tuple(points[2:4]),(0, 255, 0), 2)
 
 
-def gen_3D_box(yaw,dims,cam_to_img,box_2D):
+def gen_3D_box(yaw,theta_ray,dims,cam_to_img,box_2D):
     dims = dims.reshape((-1,1))
     box_2D = box_2D.reshape((-1,1))
     points3D = init_points3D(dims)
 
     rot_M = np.asarray([[np.cos(yaw), 0, np.sin(yaw)], [0, 1, 0], [-np.sin(yaw), 0, np.cos(yaw)]])
 
-    center = compute_center(points3D, rot_M, cam_to_img, box_2D, inds)
+    if not (0.<theta_ray<np.pi):
+        return None
+    if not (-2*np.pi<yaw<2*np.pi):
+        return None
+
+    norm_yaw=yaw
+    if yaw < 0:
+      norm_yaw=yaw+2*np.pi
+
+    if theta_ray < np.deg2rad(90):
+      if np.deg2rad(0)<norm_yaw<np.deg2rad(89):
+        constraints = IND_R0
+      elif np.deg2rad(89)<norm_yaw<np.deg2rad(179):
+        constraints = IND_R90
+      elif np.deg2rad(179)<norm_yaw<np.deg2rad(269):
+        constraints = IND_R180
+      else:
+        constraints = IND_R270
+    else:
+      if np.deg2rad(0)<norm_yaw<np.deg2rad(89):
+        constraints = IND_L0
+      elif np.deg2rad(89)<norm_yaw<np.deg2rad(179):
+        constraints = IND_L90
+      elif np.deg2rad(179)<norm_yaw<np.deg2rad(269):
+        constraints = IND_L180
+      else:
+        constraints = IND_L270
+
+    center = compute_center(points3D, rot_M, cam_to_img, box_2D, constraints)
 
     points2D = points3D_to_2D(points3D, center, rot_M, cam_to_img)
 
     return points2D
 
-def coco_to_voc_class(cls):
-    coco_to_voc = {2:0,5:1,7:2,0:3,1:5,6:6}
-    if cls not in coco_to_voc:
-        return None
-    return coco_to_voc[cls]
+
+def filter_only_voc_class(bboxes):
+    bboxes_copy = bboxes.copy()
+    bboxes_new = []
+    for b in bboxes_copy:
+        cls = int(b[5])
+        if cls in COCO_TO_VOC:
+            b[5] = COCO_TO_VOC[cls]
+            bboxes_new.append(b)
+    return bboxes_new
