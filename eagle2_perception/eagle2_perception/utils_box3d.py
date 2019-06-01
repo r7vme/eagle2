@@ -93,6 +93,15 @@ IND_L270 = [
 
 COCO_TO_VOC = {2:0,5:1,7:2,0:3,1:5,6:6}
 
+# camera : x->right, y->down, z->forward
+# world: x->forward, y->left, z->up
+to_world_frame = np.array([
+  [  0.,  0.,  1.],
+  [ -1.,  0.,  0.],
+  [  0., -1.,  0.]
+])
+to_cam_frame = to_world_frame.T
+
 def compute_yaw(prediction, xmin, xmax, fx, u0):
     theta_ray = np.arctan2(fx, ((xmin + xmax) / 2.0 - u0))
     max_anc = np.argmax(prediction[2][0])
@@ -119,12 +128,6 @@ def init_points3D(dims):
                 points3D[cnt] = dims[[1, 0, 2]].T / 2.0 * [i, k, j * i]
                 cnt += 1
     return points3D
-
-
-def solve_least_squre(W,y):
-    U, Sigma, VT = np.linalg.svd(W)
-    result = np.dot(np.dot(np.dot(VT.T, np.linalg.pinv(np.eye(4, 3) * Sigma)), U.T), y)
-    return result
 
 
 def points3D_to_2D(points3D,center,rot_M,cam_to_img):
@@ -160,6 +163,8 @@ def compute_center(points3D,rot_M,cam_to_img,box_2D, inds):
                   [fx, 0, float(u0 - box_2D[2])],
                   [0, fy, float(v0 - box_2D[1])],
                   [0, fy, float(v0 - box_2D[3])]])
+    U, Sigma, VT = np.linalg.svd(W)
+
     center =None
     error_min = 1e10
 
@@ -167,8 +172,9 @@ def compute_center(points3D,rot_M,cam_to_img,box_2D, inds):
         y = np.zeros((4, 1))
         for i in range(len(ind)):
             RP = np.dot(rot_M, (points3D[ind[i]]).reshape((-1, 1)))
+            # XXX: i'm not 100% understand what is Y
             y[i] = box_2D[i] * cam_to_img[2, 3] - np.dot(W[i], RP) - cam_to_img[i // 2, 3]
-        result = solve_least_squre(W, y)
+        result = np.dot(np.dot(np.dot(VT.T, np.linalg.pinv(np.eye(4, 3) * Sigma)), U.T), y)
         error = compute_error(points3D, result, rot_M, cam_to_img, box_2D)
         if error < error_min and result[2,0]>0:
             center = result
@@ -235,9 +241,10 @@ def gen_3D_box(yaw,theta_ray,dims,cam_to_img,box_2D):
 
     center = compute_center(points3D, rot_M, cam_to_img, box_2D, constraints)
 
-    points2D = points3D_to_2D(points3D, center, rot_M, cam_to_img)
+    pts_projected = points3D_to_2D(points3D, center, rot_M, cam_to_img)
+    pts_world     = points3D_to_world(points3D, center, rot_M, cam_to_img)
 
-    return points2D
+    return pts_projected, pts_world
 
 
 def filter_only_voc_class(bboxes):
@@ -249,3 +256,28 @@ def filter_only_voc_class(bboxes):
             b[5] = COCO_TO_VOC[cls]
             bboxes_new.append(b)
     return bboxes_new
+
+def points3D_to_world(points3D,center,rot_M,cam_to_img):
+    points3D_new = np.empty_like(points3D)
+    for i, p in enumerate(points3D):
+        p = p.reshape((-1,1))
+        p = center + np.dot(rot_M, p)
+        p = to_world_frame.dot(p)
+        points3D_new[i] = p[:,0]
+    return points3D_new
+
+def rot_from_euler(theta):
+    R_x = np.array([[1,         0,                  0                   ],
+                    [0,         np.cos(theta[0]), -np.sin(theta[0]) ],
+                    [0,         np.sin(theta[0]), np.cos(theta[0])  ]
+                    ])
+    R_y = np.array([[np.cos(theta[1]),    0,      np.sin(theta[1])  ],
+                    [0,                     1,      0                   ],
+                    [-np.sin(theta[1]),   0,      np.cos(theta[1])  ]
+                    ])
+    R_z = np.array([[np.cos(theta[2]),    -np.sin(theta[2]),    0],
+                    [np.sin(theta[2]),    np.cos(theta[2]),     0],
+                    [0,                     0,                      1]
+                    ])
+    R = np.dot(R_z, np.dot( R_y, R_x ))
+    return R

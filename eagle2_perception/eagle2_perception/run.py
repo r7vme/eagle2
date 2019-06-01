@@ -27,8 +27,17 @@ def run():
     dims_avg = np.array(cfg["voc_dims_avg"])
     do_viz = cfg["do_viz"]
 
-    fx = K[0][0]
-    u0 = K[0][2]
+    K = np.array([[7.215377000000e+02, 0.000000000000e+00, 6.095593000000e+02],
+                  [0.000000000000e+00, 7.215377000000e+02, 1.728540000000e+02],
+                  [0.000000000000e+00, 0.000000000000e+00, 1.000000000000e+00]])
+    # how the world is transformed relative to the camera.
+    height = 1.22
+    pitch = np.deg2rad(0)
+    RT = np.hstack((utils_box3d.rot_from_euler([pitch, 0, 0]), [[0], [height], [0]]))
+    P = np.dot(K, RT)
+
+    fx = P[0][0]
+    u0 = P[0][2]
 
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = 0.4
@@ -77,6 +86,7 @@ def run():
         bboxes = utils.nms(bboxes, 0.45, method='nms')
         if do_viz:
             image = utils.draw_bbox(frame, bboxes)
+            top = np.zeros((500,500,3), np.uint8)
 
         # 3D box
         bboxes = utils_box3d.filter_only_voc_class(bboxes)
@@ -106,14 +116,27 @@ def run():
             pred = [[predictions[0][i]], [predictions[1][i]], [predictions[2][i]]]
             dims = dims_avg[cls] + pred[0][0]
             yaw, theta_ray = utils_box3d.compute_yaw(pred, xmin, xmax, fx, u0)
-            points2D = utils_box3d.gen_3D_box(yaw, theta_ray, dims, P, box_2D)
+            points2D, points3D = utils_box3d.gen_3D_box(yaw, theta_ray, dims, P, box_2D)
             if do_viz:
                 utils_box3d.draw_3D_box(image, points2D)
+                p1x=int(250-points3D[0][1]*10)
+                p1y=int(500-points3D[0][0]*10)
+                p2x=int(250-points3D[2][1]*10)
+                p2y=int(500-points3D[2][0]*10)
+                p3x=int(250-points3D[4][1]*10)
+                p3y=int(500-points3D[4][0]*10)
+                p4x=int(250-points3D[6][1]*10)
+                p4y=int(500-points3D[6][0]*10)
+                cv2.line(top,(p1x, p1y),(p2x, p2y),(0,255,0),1)
+                cv2.line(top,(p2x, p2y),(p3x, p3y),(0,255,0),1)
+                cv2.line(top,(p3x, p3y),(p4x, p4y),(0,255,0),1)
+                cv2.line(top,(p4x, p4y),(p1x, p1y),(0,255,0),1)
+                cv2.line(top,(250, 0),(250, 500),(255,0,0),1)
 
         if do_viz:
             cv2.namedWindow("result", cv2.WINDOW_AUTOSIZE)
             cv2.imshow("result", image)
-            cv2.imwrite("result.png", image)
+            cv2.imshow("top", top)
             if cv2.waitKey(0) & 0xFF == ord('q'): break
 
 
