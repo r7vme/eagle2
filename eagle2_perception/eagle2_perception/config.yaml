@@ -1,5 +1,6 @@
 yolo_pb: ./yolov3_coco.pb
 box3d_pb: ./box3d.pb
+enet_pb: ./enet.pb
 cam_id: 0
 cam_res:
 - 800
