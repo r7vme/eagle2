@@ -225,11 +225,7 @@ namespace Tn
         // DMA the input to the GPU,  execute the batch asynchronously, and DMA it back:
         int inputIndex = 0;
         CUDA_CHECK(cudaMemcpyAsync(mTrtCudaBuffer[inputIndex], inputData, mTrtBindBufferSize[inputIndex], cudaMemcpyHostToDevice, mTrtCudaStream));
-        auto t_start = std::chrono::high_resolution_clock::now();
         mTrtContext->execute(batchSize, &mTrtCudaBuffer[inputIndex]);
-        auto t_end = std::chrono::high_resolution_clock::now();
-        float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
-        std::cout << "Time taken for inference is " << total << " ms." << std::endl;
 
         for (size_t bindingIdx = mTrtInputCount; bindingIdx < mTrtBindBufferSize.size(); ++bindingIdx)
         {
