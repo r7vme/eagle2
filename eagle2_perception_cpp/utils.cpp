@@ -1,5 +1,8 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
+#include <tensorflow/core/protobuf/meta_graph.pb.h>
+#include <tensorflow/core/public/session.h>
+#include <tensorflow/core/public/session_options.h>
 #include <TrtNet.h>
 #include <YoloLayer.h>
 
@@ -7,13 +10,16 @@
 
 
 using namespace std;
+using namespace Eigen;
 
 
 namespace perception
 {
 
-//def init_points3D(dims):
-//    points3D = np.zeros((8, 3)) 
+Points3D init_points3D(const std::array<float, 3> &dims)
+{
+  Points3D points3D = MatrixXf::Zero(8, 3);
+  return points3D;
 //    cnt = 0 
 //    for i in [1, -1]:
 //        for j in [1, -1]:
@@ -21,6 +27,23 @@ namespace perception
 //                points3D[cnt] = dims[[1, 0, 2]].T / 2.0 * [i, k, j * i]
 //                cnt += 1
 //    return points3D
+}
+
+tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn)
+{
+  tensorflow::Status status;
+
+  // Read in the protobuf graph we exported
+  tensorflow::MetaGraphDef graph_def;
+  status = ReadBinaryProto(tensorflow::Env::Default(), graph_fn, &graph_def);
+  if (status != tensorflow::Status::OK()) return status;
+
+  // create the graph in the current session
+  status = sess->Create(graph_def.graph_def());
+  if (status != tensorflow::Status::OK()) return status;
+
+  return tensorflow::Status::OK();
+}
 
 vector<float> prepare_image(cv::Mat& img)
 {

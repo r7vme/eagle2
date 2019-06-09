@@ -1,5 +1,6 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
+#include <tensorflow/core/platform/env.h>
 #include <tensorflow/core/protobuf/meta_graph.pb.h>
 #include <tensorflow/core/public/session.h>
 #include <tensorflow/core/public/session_options.h>
@@ -12,21 +13,6 @@
 
 using namespace std;
 using namespace perception;
-
-//tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn) {
-//  tensorflow::Status status;
-//
-//  // Read in the protobuf graph we exported
-//  tensorflow::MetaGraphDef graph_def;
-//  status = ReadBinaryProto(tensorflow::Env::Default(), graph_fn, &graph_def);
-//  if (status != tensorflow::Status::OK()) return status;
-//
-//  // create the graph in the current session
-//  status = sess->Create(graph_def.graph_def());
-//  if (status != tensorflow::Status::OK()) return status;
-//
-//  return tensorflow::Status::OK();
-//}
 
 int main()
 {
@@ -53,23 +39,13 @@ int main()
   net.reset(new Tn::trtNet(yolo_engine));
 
   // tensorflow session options
-  //tensorflow::SessionOptions tf_options;
-  //tf_options.config.mutable_gpu_options()->set_allow_growth(true);
+  tensorflow::SessionOptions tf_options;
+  tf_options.config.mutable_gpu_options()->set_allow_growth(true);
 
-  //// box3d (TensorFlow)
-  //tensorflow::Session *b3d_sess;
-  //TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
-  //TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
-
-  // prepare inputs
-  //tensorflow::TensorShape data_shape({1, 2});
-  //tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-  //tensor_dict feed_dict = {
-  //    {"input", data},
-  //};
-  //vector<tensorflow::Tensor> outputs;
-  //TF_CHECK_OK(sess->Run(feed_dict, {"output", "dense/kernel:0", "dense/bias:0"},
-  //                      {}, &outputs));
+  // box3d (TensorFlow)
+  tensorflow::Session *b3d_sess;
+  TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
+  TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
 
   cv::VideoCapture cap(cam_id);
   if (!cap.isOpened())
@@ -120,6 +96,22 @@ int main()
         cv::Scalar(0,0,255), 3, 8, 0
       );
     }
+
+    // prepare inputs
+    cv::Rect patchRect(0, 0, 100, 100);
+    cv::Mat patch;
+    cv::resize(frame(patchRect), patch, cv::Size(224, 224), 0, 0, CV_INTER_CUBIC);
+    patch.convertTo(patch, CV_32FC3);
+    subtract(patch,NORM_CAFFE,patch);
+    //tensorflow::TensorShape data_shape({1, 2});
+    //tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+    //tensor_dict feed_dict = {
+    //    {"input", data},
+    //};
+    //vector<tensorflow::Tensor> outputs;
+    //TF_CHECK_OK(sess->Run(feed_dict, {"output", "dense/kernel:0", "dense/bias:0"},
+    //                      {}, &outputs));
+
     //cv::imwrite("result.jpg", frame);
     //cv::imshow("result", frame);
     //cv::waitKey(10);
