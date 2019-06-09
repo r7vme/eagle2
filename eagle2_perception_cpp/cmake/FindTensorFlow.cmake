@@ -273,6 +273,7 @@ find_package_handle_standard_args(
   FOUND_VAR TENSORFLOW_FOUND
   REQUIRED_VARS
     TensorFlow_LIBRARY
+    TensorFlow_C_LIBRARY
     TensorFlow_INCLUDE_DIR
   VERSION_VAR
     TensorFlow_VERSION
@@ -286,5 +287,6 @@ SET(TensorFlow_INCLUDE_DIR ${TensorFlow_INCLUDE_DIR} CACHE PATH "path to tensorf
 SET(TensorFlow_VERSION ${TensorFlow_VERSION} CACHE INTERNAL "The Python executable Version")
 SET(TensorFlow_ABI ${TensorFlow_ABI} CACHE STRING "The Python executable Version")
 SET(TensorFlow_LIBRARY ${TensorFlow_LIBRARY} CACHE PATH "The Python executable Version")
+SET(TensorFlow_C_LIBRARY ${TensorFlow_C_LIBRARY} CACHE PATH "The Python executable Version")
 SET(TensorFlow_FOUND ${TensorFlow_FOUND} CACHE BOOL "The Python executable Version")
 SET(TF_DISABLE_ASSERTS ${TF_DISABLE_ASSERTS} CACHE BOOL "Workarounds")
