@@ -21,7 +21,14 @@ FIND_PACKAGE(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenCV_LIBRARIES_DIRS})
 
+# tensorflow
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
+set(PYTHON_EXECUTABLE "python3")
+include(FindTensorFlow)
+include_directories(${TensorFlow_INCLUDE_DIR})
+link_directories(${TensorFlow_LIBRARY})
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_executable(perception perception.cpp utils.cpp)
-target_link_libraries(perception TrtNet yaml-cpp ${OpenCV_LIBS})
+target_link_libraries(perception TrtNet yaml-cpp ${OpenCV_LIBS} ${TensorFlow_LIBRARY})

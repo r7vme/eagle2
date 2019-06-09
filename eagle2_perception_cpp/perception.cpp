@@ -1,7 +1,10 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
-#include <yaml-cpp/yaml.h>
+#include <tensorflow/core/protobuf/meta_graph.pb.h>
+#include <tensorflow/core/public/session.h>
+#include <tensorflow/core/public/session_options.h>
 #include <TrtNet.h>
+#include <yaml-cpp/yaml.h>
 #include <YoloLayer.h>
 
 #include "utils.hpp"
@@ -10,6 +13,20 @@
 using namespace std;
 using namespace perception;
 
+//tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn) {
+//  tensorflow::Status status;
+//
+//  // Read in the protobuf graph we exported
+//  tensorflow::MetaGraphDef graph_def;
+//  status = ReadBinaryProto(tensorflow::Env::Default(), graph_fn, &graph_def);
+//  if (status != tensorflow::Status::OK()) return status;
+//
+//  // create the graph in the current session
+//  status = sess->Create(graph_def.graph_def());
+//  if (status != tensorflow::Status::OK()) return status;
+//
+//  return tensorflow::Status::OK();
+//}
 
 int main()
 {
@@ -27,11 +44,32 @@ int main()
   float top_down_resolution  = config["top_down_resolution"].as<float>();
 
   string yolo_engine = config["yolo_engine"].as<string>();
+  string box3d_pb = config["box3d_pb"].as<string>();
+  string enet_pb = config["enet_pb"].as<string>();
 
-  // yolo
+  // yolo (TensorRT)
   unique_ptr<Tn::trtNet> net;
-  // TODO: now it fails silently, check if initialized.
+  // TODO: it can fail silently, check if initialized.
   net.reset(new Tn::trtNet(yolo_engine));
+
+  // tensorflow session options
+  //tensorflow::SessionOptions tf_options;
+  //tf_options.config.mutable_gpu_options()->set_allow_growth(true);
+
+  //// box3d (TensorFlow)
+  //tensorflow::Session *b3d_sess;
+  //TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
+  //TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
+
+  // prepare inputs
+  //tensorflow::TensorShape data_shape({1, 2});
+  //tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+  //tensor_dict feed_dict = {
+  //    {"input", data},
+  //};
+  //vector<tensorflow::Tensor> outputs;
+  //TF_CHECK_OK(sess->Run(feed_dict, {"output", "dense/kernel:0", "dense/bias:0"},
+  //                      {}, &outputs));
 
   cv::VideoCapture cap(cam_id);
   if (!cap.isOpened())
@@ -48,7 +86,7 @@ int main()
   while(true)
   {
     if (!cap.read(frame))
-      break;
+      continue;
 
     vector<float> input_data = prepare_image(frame);
 
@@ -67,12 +105,24 @@ int main()
     memcpy(result.data(), &output[1], detCount*sizeof(Yolo::Detection));
     auto bboxes = postprocess_image(frame, result, YOLO_NUM_CLS);
 
+    //auto t_start = std::chrono::high_resolution_clock::now();
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+    //std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+
     //draw on image
     for(const auto& bbox: bboxes)
     {
-          cv::rectangle(frame,cv::Point(bbox.left,bbox.top),cv::Point(bbox.right,bbox.bot),cv::Scalar(0,0,255),3,8,0);
+      cv::rectangle(
+        frame,
+        cv::Point(bbox.left,bbox.top),
+        cv::Point(bbox.right,bbox.bot),
+        cv::Scalar(0,0,255), 3, 8, 0
+      );
     }
     //cv::imwrite("result.jpg", frame);
+    //cv::imshow("result", frame);
+    //cv::waitKey(10);
   }
   return 0;
 }

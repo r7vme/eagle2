@@ -1,7 +1,6 @@
 #include "TrtNet.h"
 #include "EntroyCalibrator.h"
 #include <cassert>
-#include <chrono>
 #include <cublas_v2.h>
 #include <cudnn.h>
 #include <iostream>

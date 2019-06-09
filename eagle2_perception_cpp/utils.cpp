@@ -12,6 +12,16 @@ using namespace std;
 namespace perception
 {
 
+//def init_points3D(dims):
+//    points3D = np.zeros((8, 3)) 
+//    cnt = 0 
+//    for i in [1, -1]:
+//        for j in [1, -1]:
+//            for k in [1, -1]:
+//                points3D[cnt] = dims[[1, 0, 2]].T / 2.0 * [i, k, j * i]
+//                cnt += 1
+//    return points3D
+
 vector<float> prepare_image(cv::Mat& img)
 {
     int h=YOLO_H; int w=YOLO_W; int c=YOLO_C;
