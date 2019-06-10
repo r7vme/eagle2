@@ -28,6 +28,7 @@ int main()
   int top_down_width         = config["top_down_width"].as<int>();
   int top_down_height        = config["top_down_height"].as<int>();
   float top_down_resolution  = config["top_down_resolution"].as<float>();
+  vector<vector<float>> dims_avg = config["voc_dims_avg"].as<vector<vector<float>>>();
 
   string yolo_engine = config["yolo_engine"].as<string>();
   string box3d_pb = config["box3d_pb"].as<string>();
@@ -46,6 +47,14 @@ int main()
   tensorflow::Session *b3d_sess;
   TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
   TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
+  vector<string> b3d_tensors{"input_1","dimension/LeakyRelu",
+                             "orientation/l2_normalize", "confidence/Softmax"};
+
+  // enet (TensorFlow)
+  tensorflow::Session *enet_sess;
+  TF_CHECK_OK(tensorflow::NewSession(tf_options, &enet_sess));
+  TF_CHECK_OK(LoadModel(enet_sess, enet_pb));
+  vector<string> enet_tensors{"imgs_ph","early_drop_prob_ph", "fullconv/Relu"};
 
   cv::VideoCapture cap(cam_id);
   if (!cap.isOpened())
@@ -81,11 +90,6 @@ int main()
     memcpy(result.data(), &output[1], detCount*sizeof(Yolo::Detection));
     auto bboxes = postprocess_image(frame, result, YOLO_NUM_CLS);
 
-    //auto t_start = std::chrono::high_resolution_clock::now();
-    //auto t_end = std::chrono::high_resolution_clock::now();
-    //float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
-    //std::cout << "Time taken for inference is " << total << " ms." << std::endl;
-
     //draw on image
     for(const auto& bbox: bboxes)
     {
@@ -98,11 +102,94 @@ int main()
     }
 
     // prepare inputs
+    tensorflow::Tensor b3d_input(tensorflow::DT_FLOAT,
+      tensorflow::TensorShape({1, B3D_H, B3D_W, B3D_C}));
+    auto b3d_input_mapped = b3d_input.tensor<float, 4>();
+
     cv::Rect patchRect(0, 0, 100, 100);
     cv::Mat patch;
-    cv::resize(frame(patchRect), patch, cv::Size(224, 224), 0, 0, CV_INTER_CUBIC);
+    cv::resize(frame(patchRect), patch, cv::Size(B3D_W, B3D_H), 0, 0, CV_INTER_CUBIC);
     patch.convertTo(patch, CV_32FC3);
     subtract(patch,NORM_CAFFE,patch);
+
+    {
+      const float * source_data = (float*) patch.data;
+      // copying the data into the corresponding tensor
+      for (int y = 0; y < B3D_H; ++y) {
+        const float* source_row = source_data + (y * B3D_W * B3D_C);
+        for (int x = 0; x < B3D_W; ++x) {
+          const float* source_pixel = source_row + (x * B3D_C);
+          for (int c = 0; c < B3D_C; ++c) {
+            const float* source_value = source_pixel + c;
+            b3d_input_mapped(0, y, x, c) = *source_value;
+          }
+        }
+      }
+    }
+    vector<tensorflow::Tensor> b3d_output;
+    // running the loaded graph
+    tensorflow::Status b3d_status  = b3d_sess->Run(
+      {{b3d_tensors[0], b3d_input}},
+      {b3d_tensors[1], b3d_tensors[2], b3d_tensors[3]},
+      {},
+      &b3d_output
+    );
+    if (!b3d_status.ok())
+      continue;
+
+    // enet
+    // prepare inputs
+    tensorflow::Tensor enet_input(tensorflow::DT_FLOAT,
+      tensorflow::TensorShape({1, ENET_H, ENET_W, ENET_C}));
+    auto enet_input_mapped = enet_input.tensor<float, 4>();
+
+    cv::Mat enet_in;
+    cv::resize(frame, enet_in, cv::Size(ENET_W, ENET_H), 0, 0, CV_INTER_CUBIC);
+    enet_in.convertTo(enet_in, CV_32FC3);
+    subtract(enet_in,NORM_CITY,enet_in);
+
+    {
+      const float * source_data = (float*) enet_in.data;
+      // copying the data into the corresponding tensor
+      for (int y = 0; y < ENET_H; ++y) {
+        const float* source_row = source_data + (y * ENET_W * ENET_C);
+        for (int x = 0; x < ENET_W; ++x) {
+          const float* source_pixel = source_row + (x * ENET_C);
+          for (int c = 0; c < ENET_C; ++c) {
+            const float* source_value = source_pixel + c;
+            enet_input_mapped(0, y, x, c) = *source_value;
+          }
+        }
+      }
+    }
+    tensorflow::Tensor enet_input2(tensorflow::DT_FLOAT, tensorflow::TensorShape());
+    enet_input2.scalar<float>()() = 0.0;
+
+    vector<tensorflow::Tensor> enet_output;
+    tensorflow::Status enet_status  = enet_sess->Run(
+      {
+        {enet_tensors[0], enet_input},
+        {enet_tensors[1], enet_input2}
+      },
+      {enet_tensors[2]},
+      {},
+      &enet_output
+    );
+    if (!enet_status.ok())
+      continue;
+
+    cv::Mat img(ENET_H, ENET_W, CV_8UC3);
+    label_image_to_color(enet_output[0], img);
+    //auto t_start = std::chrono::high_resolution_clock::now();
+    //auto t_end = std::chrono::high_resolution_clock::now();
+    //float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+    //std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+    cv::imwrite("1.jpg", img);
+
+
+    //cout << enet_output[0].DebugString() << endl;
+    //cout << enet_output.size() << endl;
+
     //tensorflow::TensorShape data_shape({1, 2});
     //tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
     //tensor_dict feed_dict = {

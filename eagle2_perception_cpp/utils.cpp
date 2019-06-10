@@ -34,12 +34,12 @@ tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn)
   tensorflow::Status status;
 
   // Read in the protobuf graph we exported
-  tensorflow::MetaGraphDef graph_def;
+  tensorflow::GraphDef graph_def;
   status = ReadBinaryProto(tensorflow::Env::Default(), graph_fn, &graph_def);
   if (status != tensorflow::Status::OK()) return status;
 
   // create the graph in the current session
-  status = sess->Create(graph_def.graph_def());
+  status = sess->Create(graph_def);
   if (status != tensorflow::Status::OK()) return status;
 
   return tensorflow::Status::OK();
@@ -191,6 +191,36 @@ vector<string> split(const string& str, char delim)
     }
 
     return container;
+}
+
+void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
+{
+    CV_Assert(img.rows==ENET_H && img.cols==ENET_W);
+
+    auto tr_mapped = tr.tensor<float, 4>();
+
+    cv::Mat_<cv::Vec3b> _I = img;
+    for( int i = 0; i < ENET_H; ++i) {
+      for( int j = 0; j < ENET_W; ++j ) {
+        // do argmax
+        float max_v = 0.; float v = 0.; int max_i = 0;
+        for (int k = 0; k < ENET_NUM_CLS; ++k) {
+          v = tr_mapped(0, i, j, k);
+          if (v > max_v)
+          {
+            max_i = k;
+            max_v = v;
+          }
+        }
+        auto t_start = std::chrono::high_resolution_clock::now();
+        // finally set specific color
+        _I(i,j) = ENET_LABEL_TO_COLOR[max_i];
+        auto t_end = std::chrono::high_resolution_clock::now();
+        float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+        std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+      }
+    }
+    img = _I;
 }
 
 } // namespace perception

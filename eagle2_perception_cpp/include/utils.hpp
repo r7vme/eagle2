@@ -14,14 +14,47 @@ using namespace Eigen;
 namespace perception
 {
 
-  // box3d utils
+  // box3d
   typedef Matrix<float,8,3> Points3D;
   Points3D init_points3D(const std::array<float, 3> &dims);
+  const int B3D_C = 3;
+  const int B3D_W = 224;
+  const int B3D_H = 224;
+
+  // enet
+  const int ENET_C = 3;
+  const int ENET_W = 1024;
+  const int ENET_H = 512;
+  const int ENET_NUM_CLS = 20;
+  const vector<cv::Vec3b> ENET_LABEL_TO_COLOR =
+  {
+    {128, 64,128},
+    {244, 35,232},
+    { 70, 70, 70},
+    {102,102,156},
+    {190,153,153},
+    {153,153,153},
+    {250,170, 30},
+    {220,220,  0},
+    {107,142, 35},
+    {152,251,152},
+    { 70,130,180},
+    {220, 20, 60},
+    {255,  0,  0},
+    {  0,  0,142},
+    {  0,  0, 70},
+    {  0, 60,100},
+    {  0, 80,100},
+    {  0,  0,230},
+    {119, 11, 32},
+    {81,  0,  81}
+  };
+  void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img);
 
   // tensorflow utils
   tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);
 
-  // yolo utils
+  // yolo
   struct YoloBbox
   {
       int classId;
@@ -31,7 +64,7 @@ namespace perception
       int bot;
       float score;
   };
-  const float NORM_CITY[3] = { 72.78044, 83.21195, 73.45286};
+  const cv::Scalar NORM_CITY(72.78044, 83.21195, 73.45286);
   const cv::Scalar NORM_CAFFE(103.939, 116.779, 123.68);
   const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
   const int YOLO_C = 3;
