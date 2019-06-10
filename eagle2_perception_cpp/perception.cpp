@@ -29,6 +29,8 @@ int main()
   int top_down_height        = config["top_down_height"].as<int>();
   float top_down_resolution  = config["top_down_resolution"].as<float>();
   vector<vector<float>> dims_avg = config["voc_dims_avg"].as<vector<vector<float>>>();
+  vector<vector<float>> H_vec = config["H"].as<vector<vector<float>>>();
+  cv::Mat H = toMat(H_vec);
 
   string yolo_engine = config["yolo_engine"].as<string>();
   string box3d_pb = config["box3d_pb"].as<string>();
@@ -48,13 +50,14 @@ int main()
   TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
   TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
   vector<string> b3d_tensors{"input_1","dimension/LeakyRelu",
-                             "orientation/l2_normalize", "confidence/Softmax"};
+                             "orientation/l2_normalize","confidence/Softmax"};
 
   // enet (TensorFlow)
   tensorflow::Session *enet_sess;
   TF_CHECK_OK(tensorflow::NewSession(tf_options, &enet_sess));
   TF_CHECK_OK(LoadModel(enet_sess, enet_pb));
-  vector<string> enet_tensors{"imgs_ph","early_drop_prob_ph", "fullconv/Relu"};
+  vector<string> enet_tensors{"imgs_ph","early_drop_prob_ph",
+                              "late_drop_prob_ph","argmax_1"};
 
   cv::VideoCapture cap(cam_id);
   if (!cap.isOpened())
@@ -164,27 +167,31 @@ int main()
     }
     tensorflow::Tensor enet_input2(tensorflow::DT_FLOAT, tensorflow::TensorShape());
     enet_input2.scalar<float>()() = 0.0;
+    tensorflow::Tensor enet_input3(tensorflow::DT_FLOAT, tensorflow::TensorShape());
+    enet_input3.scalar<float>()() = 0.0;
 
     vector<tensorflow::Tensor> enet_output;
+    auto t_start = std::chrono::high_resolution_clock::now();
     tensorflow::Status enet_status  = enet_sess->Run(
       {
         {enet_tensors[0], enet_input},
-        {enet_tensors[1], enet_input2}
+        {enet_tensors[1], enet_input2},
+        {enet_tensors[2], enet_input3}
       },
-      {enet_tensors[2]},
+      {enet_tensors[3]},
       {},
       &enet_output
     );
+    auto t_end = std::chrono::high_resolution_clock::now();
+    float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+    std::cout << "Time taken for inference is " << total << " ms." << std::endl;
     if (!enet_status.ok())
       continue;
 
-    cv::Mat img(ENET_H, ENET_W, CV_8UC3);
-    label_image_to_color(enet_output[0], img);
-    //auto t_start = std::chrono::high_resolution_clock::now();
-    //auto t_end = std::chrono::high_resolution_clock::now();
-    //float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
-    //std::cout << "Time taken for inference is " << total << " ms." << std::endl;
-    cv::imwrite("1.jpg", img);
+    //cv::Mat img(ENET_H, ENET_W, CV_8UC3);
+    //label_image_to_color(enet_output[0], img);
+    //cv::imwrite("1.jpg", img);
+    cv::Mat top_down = get_top_down_occupancy_array(enet_output[0]);
 
 
     //cout << enet_output[0].DebugString() << endl;

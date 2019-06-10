@@ -19,7 +19,7 @@ namespace perception
 Points3D init_points3D(const std::array<float, 3> &dims)
 {
   Points3D points3D = MatrixXf::Zero(8, 3);
-  return points3D;
+//  return points3D;
 //    cnt = 0 
 //    for i in [1, -1]:
 //        for j in [1, -1]:
@@ -193,31 +193,34 @@ vector<string> split(const string& str, char delim)
     return container;
 }
 
+cv::Mat get_top_down_occupancy_array(const tensorflow::Tensor tr)
+{
+    auto tr_mapped = tr.tensor<int, 3>();
+
+    cv::Mat1b img(ENET_H, ENET_W, 100);
+    for( int i = 0; i < ENET_H; ++i) {
+      for( int j = 0; j < ENET_W; ++j ) {
+        int label = tr_mapped(0, i, j);
+        if (label==0)
+          img(i,j) = 0;
+      }
+    }
+    //cv::Mat1b top(TOP_H, TOP_W);
+    //cv::warpPerspective(img,top,H)
+    return img;
+}
+
 void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
 {
     CV_Assert(img.rows==ENET_H && img.cols==ENET_W);
 
-    auto tr_mapped = tr.tensor<float, 4>();
+    auto tr_mapped = tr.tensor<int, 3>();
 
     cv::Mat_<cv::Vec3b> _I = img;
     for( int i = 0; i < ENET_H; ++i) {
       for( int j = 0; j < ENET_W; ++j ) {
-        // do argmax
-        float max_v = 0.; float v = 0.; int max_i = 0;
-        for (int k = 0; k < ENET_NUM_CLS; ++k) {
-          v = tr_mapped(0, i, j, k);
-          if (v > max_v)
-          {
-            max_i = k;
-            max_v = v;
-          }
-        }
-        auto t_start = std::chrono::high_resolution_clock::now();
-        // finally set specific color
-        _I(i,j) = ENET_LABEL_TO_COLOR[max_i];
-        auto t_end = std::chrono::high_resolution_clock::now();
-        float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
-        std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+        int label = tr_mapped(0, i, j);
+        _I(i,j) = ENET_LABEL_TO_COLOR[label];
       }
     }
     img = _I;

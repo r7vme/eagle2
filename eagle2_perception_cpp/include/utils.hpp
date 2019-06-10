@@ -13,6 +13,18 @@ using namespace Eigen;
 
 namespace perception
 {
+  template<typename _Tp> static  cv::Mat toMat(const vector<vector<_Tp> > vecIn) {
+      cv::Mat_<_Tp> matOut(vecIn.size(), vecIn.at(0).size());
+      for (int i = 0; i < matOut.rows; ++i) {
+          for (int j = 0; j < matOut.cols; ++j) {
+              matOut(i, j) = vecIn.at(i).at(j);
+          }
+      }
+      return matOut;
+  }
+
+  const int TOP_W = 500;
+  const int TOP_H = 500;
 
   // box3d
   typedef Matrix<float,8,3> Points3D;
@@ -26,6 +38,7 @@ namespace perception
   const int ENET_W = 1024;
   const int ENET_H = 512;
   const int ENET_NUM_CLS = 20;
+  const int ENET_ROAD_CLS = 0;
   const vector<cv::Vec3b> ENET_LABEL_TO_COLOR =
   {
     {128, 64,128},
@@ -50,6 +63,7 @@ namespace perception
     {81,  0,  81}
   };
   void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img);
+  cv::Mat get_top_down_occupancy_array(const tensorflow::Tensor tr);
 
   // tensorflow utils
   tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);
