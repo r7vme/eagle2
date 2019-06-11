@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <opencv2/opencv.hpp>
 #include <TrtNet.h>
 #include <tensorflow/core/protobuf/meta_graph.pb.h>
@@ -13,25 +14,32 @@ using namespace Eigen;
 
 namespace perception
 {
-  template<typename _Tp> static  cv::Mat toMat(const vector<vector<_Tp> > vecIn) {
-      cv::Mat_<_Tp> matOut(vecIn.size(), vecIn.at(0).size());
-      for (int i = 0; i < matOut.rows; ++i) {
-          for (int j = 0; j < matOut.cols; ++j) {
-              matOut(i, j) = vecIn.at(i).at(j);
-          }
-      }
-      return matOut;
-  }
 
   const int TOP_W = 500;
   const int TOP_H = 500;
+  const float TOP_RESOLUTION = 0.1; // 10cm/px
+  const int CAM_W = 1226;
+  const int CAM_H = 370;
+  const int CAM_FPS = 10;
 
   // box3d
   typedef Matrix<float,8,3> Points3D;
   Points3D init_points3D(const std::array<float, 3> &dims);
+  const int B3D_MAX_OBJECTS = 4;
   const int B3D_C = 3;
   const int B3D_W = 224;
   const int B3D_H = 224;
+  const int B3D_BIN_NUM = 6;
+  const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
+  struct Bbox3D
+  {
+      float cos;
+      float sin;
+      float h;
+      float w;
+      float l;
+      int bin_id;
+  };
 
   // enet
   const int ENET_C = 3;
@@ -63,7 +71,7 @@ namespace perception
     {81,  0,  81}
   };
   void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img);
-  cv::Mat get_top_down_occupancy_array(const tensorflow::Tensor tr);
+  cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H);
 
   // tensorflow utils
   tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);
@@ -80,7 +88,6 @@ namespace perception
   };
   const cv::Scalar NORM_CITY(72.78044, 83.21195, 73.45286);
   const cv::Scalar NORM_CAFFE(103.939, 116.779, 123.68);
-  const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
   const int YOLO_C = 3;
   const int YOLO_W = 416;
   const int YOLO_H = 416;
@@ -185,4 +192,26 @@ namespace perception
     {6,2,1,4},
     {6,2,1,6},
   };
+
+  // VOC dataset average dimentions
+  const float DIMS_AVG[7][3] =
+  {
+    {1.52131309, 1.64441358, 3.85728004},
+    {2.18560847, 1.91077601, 5.08042328},
+    {3.07044968, 2.62877944, 11.17126338},
+    {1.75562272, 0.67027992, 0.87397566},
+    {1.28627907, 0.53976744, 0.96906977},
+    {1.73456498, 0.58174006, 1.77485499},
+    {3.56020305, 2.40172589, 18.60659898},
+  };
+
+  template<typename _Tp> static  cv::Mat toMat(const vector<vector<_Tp> > vecIn) {
+      cv::Mat_<_Tp> matOut(vecIn.size(), vecIn.at(0).size());
+      for (int i = 0; i < matOut.rows; ++i) {
+          for (int j = 0; j < matOut.cols; ++j) {
+              matOut(i, j) = vecIn.at(i).at(j);
+          }
+      }
+      return matOut;
+  }
 } // namespace perception

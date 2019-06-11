@@ -1,4 +1,5 @@
 #include <chrono>
+#include <math.h>
 #include <opencv2/opencv.hpp>
 #include <tensorflow/core/protobuf/meta_graph.pb.h>
 #include <tensorflow/core/public/session.h>
@@ -19,7 +20,7 @@ namespace perception
 Points3D init_points3D(const std::array<float, 3> &dims)
 {
   Points3D points3D = MatrixXf::Zero(8, 3);
-//  return points3D;
+  return points3D;
 //    cnt = 0 
 //    for i in [1, -1]:
 //        for j in [1, -1]:
@@ -193,7 +194,10 @@ vector<string> split(const string& str, char delim)
     return container;
 }
 
-cv::Mat get_top_down_occupancy_array(const tensorflow::Tensor tr)
+// - image with 0, 100 driving area
+// - resize to orig size
+// - warpperspective
+cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H)
 {
     auto tr_mapped = tr.tensor<int, 3>();
 
@@ -205,9 +209,10 @@ cv::Mat get_top_down_occupancy_array(const tensorflow::Tensor tr)
           img(i,j) = 0;
       }
     }
-    //cv::Mat1b top(TOP_H, TOP_W);
-    //cv::warpPerspective(img,top,H)
-    return img;
+    cv::resize(img, img, cv::Size(CAM_W, CAM_H), 0, 0, CV_INTER_LINEAR);
+    cv::Mat1b top;
+    cv::warpPerspective(img, top, H, cv::Size(TOP_W, TOP_H), CV_INTER_LINEAR, cv::BORDER_CONSTANT);
+    return top;
 }
 
 void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
@@ -225,5 +230,21 @@ void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
     }
     img = _I;
 }
+
+//void compute_center()
+//{
+
+//def compute_center(points3D,rot_M,cam_to_img,box_2D, inds):
+//    fx = cam_to_img[0][0]
+//    fy = cam_to_img[1][1]
+//    u0 = cam_to_img[0][2]
+//    v0 = cam_to_img[1][2]
+//    W = np.array([[fx, 0, float(u0 - box_2D[0])],
+//                  [fx, 0, float(u0 - box_2D[2])],
+//                  [0, fy, float(v0 - box_2D[1])],
+//                  [0, fy, float(v0 - box_2D[3])]])
+//    U, Sigma, VT = np.linalg.svd(W)
+
+//}
 
 } // namespace perception
