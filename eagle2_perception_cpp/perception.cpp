@@ -1,4 +1,5 @@
 #include <chrono>
+#include <math.h>
 #include <opencv2/opencv.hpp>
 #include <tensorflow/core/platform/env.h>
 #include <tensorflow/core/protobuf/meta_graph.pb.h>
@@ -28,6 +29,12 @@ int main()
   cv::Mat K = toMat(K_vec);
   float fx = K.at<float>(0,0);
   float u0 = K.at<float>(0,2);
+  // projection (extrinsic)
+  // assume world frame aligned with camera frame
+  Matrix<float,3,4> P;
+  P << K_vec[0][0],K_vec[0][1],K_vec[0][2],0.,
+       K_vec[1][0],K_vec[1][1],K_vec[1][2],0.,
+       K_vec[2][0],K_vec[2][1],K_vec[2][2],0.;
 
   string yolo_engine = config["yolo_engine"].as<string>();
   string box3d_pb = config["box3d_pb"].as<string>();
@@ -68,12 +75,15 @@ int main()
   // cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
 
   cv::Mat frame;
+  cv::Mat frame_viz;
   while(true)
   {
     if (!cap.read(frame))
       continue;
 
-    auto t_start = std::chrono::high_resolution_clock::now();
+    if (do_viz)
+      frame_viz = frame.clone();
+
     vector<float> input_data = prepare_image(frame);
 
     int output_count = net->getOutputSize()/sizeof(float);
@@ -171,14 +181,8 @@ int main()
     auto dimensions=b3d_output[0].tensor<float, 2>();
     auto orientation=b3d_output[1].tensor<float, 3>();
     auto confidence=b3d_output[2].tensor<float, 2>();
-    for (int b = 0; b < batch_size; ++b) {
-      int xmin = bboxes_cars[b].left;
-      int xmax = bboxes_cars[b].right;
-
-      Bbox3D bbox3d;
-      bbox3d.h=dimensions(b, 0) + DIMS_AVG[0][0];
-      bbox3d.w=dimensions(b, 1) + DIMS_AVG[0][1];
-      bbox3d.l=dimensions(b, 2) + DIMS_AVG[0][2];
+    for (int b = 0; b < batch_size; ++b)
+    {
       // find bin ID with max confidence
       Eigen::Matrix<float, B3D_BIN_NUM, 1> conf;
       for (int i = 0; i < B3D_BIN_NUM; ++i)
@@ -189,25 +193,40 @@ int main()
       float sin_v = orientation(b, max_a, 1);
 
       // compute yaw
+      int xmin = bboxes_cars[b].left;
+      int ymin = bboxes_cars[b].top;
+      int xmax = bboxes_cars[b].right;
+      int ymax = bboxes_cars[b].bot;
       float theta_ray = atan2(fx, ((xmin+xmax)/2.)-u0);
       float angle_offset = (sin_v > 0.) ? acos(cos_v) : -acos(cos_v);
       float wedge = (2.*M_PI)/B3D_BIN_NUM;
       float theta_loc = angle_offset + max_a * wedge;
       float theta = theta_loc + theta_ray;
-      float yaw = (M_PI/2)-theta;
-    }
+      float yaw = fmod((M_PI/2)-theta, 2*M_PI); // make yaw in betwen [-2Pi,2Pi]
 
-//        # 3D box
-//        for i, b in enumerate(bboxes):
-//            xmin, ymin, xmax, ymax = int(b[0]), int(b[1]), int(b[2]), int(b[3])
-//            box_2D = np.asarray([xmin, ymin, xmax, ymax], dtype=np.float)
-//            cls = int(bboxes[i][5])
-//            pred = [[b3d_preds[0][i]], [b3d_preds[1][i]], [b3d_preds[2][i]]]
-//            dims = dims_avg[cls] + pred[0][0]
-//            yaw, theta_ray = utils.compute_yaw(pred, xmin, xmax, fx, u0)
-//            pts = utils.gen_3D_box(yaw, theta_ray, dims, P, box_2D)
-//            if do_viz:
-//                utils.draw_3D_box(viz_img, pts)
+      // fill the values
+      Bbox3D bbox3d;
+      bbox3d.h=dimensions(b, 0) + DIMS_AVG[0][0];
+      bbox3d.w=dimensions(b, 1) + DIMS_AVG[0][1];
+      bbox3d.l=dimensions(b, 2) + DIMS_AVG[0][2];
+      bbox3d.yaw=yaw;
+      bbox3d.theta_ray=theta_ray;
+      bbox3d.xmin=xmin;
+      bbox3d.ymin=ymin;
+      bbox3d.xmax=xmax;
+      bbox3d.ymax=ymax;
+      // hmm, just skip?
+      auto t_start = std::chrono::high_resolution_clock::now();
+      bool ok = compute_3D_box(bbox3d, P);
+      if (!ok)
+        continue;
+      auto t_end = std::chrono::high_resolution_clock::now();
+      float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+      std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+      if (do_viz)
+        draw_3D_box(frame_viz, bbox3d.pts2d);
+      bboxes3d.push_back(bbox3d);
+    }
 
     // enet
     // prepare inputs
@@ -253,13 +272,13 @@ int main()
     if (!enet_status.ok())
       continue;
 
-    //cv::Mat img(ENET_H, ENET_W, CV_8UC3);
-    //label_image_to_color(enet_output[0], img);
-    cv::Mat1b top_down = get_top_down_occupancy_array(enet_output[0], H);
-    //cv::imwrite("1.jpg", top_down);
-    auto t_end = std::chrono::high_resolution_clock::now();
-    float total = std::chrono::duration<float, std::milli>(t_end - t_start).count();
-    std::cout << "Time taken for inference is " << total << " ms." << std::endl;
+    if (do_viz)
+    {
+      //cv::Mat img(ENET_H, ENET_W, CV_8UC3);
+      //label_image_to_color(enet_output[0], img);
+      cv::Mat1b top_down = get_top_down_occupancy_array(enet_output[0], H);
+      cv::imwrite("1.jpg", frame_viz);
+    }
   }
   return 0;
 }

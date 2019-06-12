@@ -24,7 +24,7 @@ namespace perception
 
   // box3d
   typedef Matrix<float,8,3> Points3D;
-  Points3D init_points3D(const std::array<float, 3> &dims);
+  typedef Matrix<int,8,2> Points2D;
   const int B3D_MAX_OBJECTS = 4;
   const int B3D_C = 3;
   const int B3D_W = 224;
@@ -33,13 +33,30 @@ namespace perception
   const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
   struct Bbox3D
   {
-      float cos;
-      float sin;
+      float yaw;
+      float theta_ray;
       float h;
       float w;
       float l;
-      int bin_id;
+      int xmin;
+      int ymin;
+      int xmax;
+      int ymax;
+      Points2D pts2d;
   };
+  bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P);
+  Points3D init_points3D(float h, float w, float l);
+  Points2D points3D_to_2D(const Points3D &pts3d,
+                          const Vector3f &center,
+                          const Matrix<float,3,3> &rot_M,
+                          const Matrix<float,3,4> &P);
+  Vector3f compute_center(const Points3D &pts3d,
+                          const Matrix<float,3,3> &rot_M,
+                          const Matrix<float,3,4> &P,
+                          const Vector4f &box_2D,
+                          const int constants_id);
+  float compute_error(const Points2D &pts, const Vector4f &box_2D);
+  void draw_3D_box(cv::Mat &img, Points2D &pts);
 
   // enet
   const int ENET_C = 3;
@@ -105,92 +122,95 @@ namespace perception
   // These numbers were computed from 1024 possible constrainer cases.
   // Main problem was performance as computation even for 256 cases
   // was taking 50ms on core i5.
-  const int IND_R0[10][4] =
+  const vector<vector<vector<int>>> CONSTRAINTS =
   {
-    {4,0,1,2},
-    {4,0,3,2},
-    {4,0,7,0},
-    {4,0,7,2},
-    {4,0,7,4},
-    {4,0,7,6},
-    {4,2,1,2},
-    {4,2,7,2},
-    {6,2,1,2},
-    {6,2,7,2}
-  };
-  const int IND_R90[6][4] =
-  {
-    {2,0,5,2},
-    {2,0,5,6},
-    {2,6,5,0},
-    {2,6,5,6},
-    {4,0,5,4},
-    {4,0,5,6},
-  };
-  const int IND_R180[10][4] =
-  {
-    {0,4,3,0},
-    {0,4,3,2},
-    {0,4,3,4},
-    {0,4,3,6},
-    {0,4,5,6},
-    {0,4,7,6},
-    {0,6,3,0},
-    {0,6,3,6},
-    {2,6,3,0},
-    {2,6,3,6},
-  };
-  const int IND_R270[6][4] =
-  {
-    {0,4,1,0},
-    {0,4,1,2},
-    {6,2,1,2},
-    {6,2,1,4},
-    {6,4,1,2},
-    {6,4,1,6},
-  };
-  const int IND_L0[8][4] =
-  {
-    {2,0,7,0},
-    {2,0,7,4},
-    {2,6,7,4},
-    {2,6,7,6},
-    {4,0,1,2},
-    {4,0,3,2},
-    {4,0,7,2},
-    {4,0,7,4},
-  };
-  const int IND_L90[8][4] =
-  {
-    {0,4,1,0},
-    {0,4,5,0},
-    {0,4,5,6},
-    {0,6,5,0},
-    {2,6,5,0},
-    {2,6,5,2},
-    {2,6,5,4},
-    {2,6,5,6},
-  };
-  const int IND_L180[7][4] =
-  {
-    {0,4,3,0},
-    {0,4,3,6},
-    {0,4,7,6},
-    {6,2,3,0},
-    {6,2,3,2},
-    {6,4,3,0},
-    {6,4,3,4},
-  };
-  const int IND_L270[8][4] =
-  {
-    {4,0,1,2},
-    {4,0,1,4},
-    {4,0,5,4},
-    {4,2,1,4},
-    {6,2,1,0},
-    {6,2,1,2},
-    {6,2,1,4},
-    {6,2,1,6},
+    // R0
+    {
+      {4,0,1,2},
+      {4,0,3,2},
+      {4,0,7,0},
+      {4,0,7,2},
+      {4,0,7,4},
+      {4,0,7,6},
+      {4,2,1,2},
+      {4,2,7,2},
+      {6,2,1,2},
+      {6,2,7,2}
+    },
+    // R90
+    {
+      {2,0,5,2},
+      {2,0,5,6},
+      {2,6,5,0},
+      {2,6,5,6},
+      {4,0,5,4},
+      {4,0,5,6},
+    },
+    // R180
+    {
+      {0,4,3,0},
+      {0,4,3,2},
+      {0,4,3,4},
+      {0,4,3,6},
+      {0,4,5,6},
+      {0,4,7,6},
+      {0,6,3,0},
+      {0,6,3,6},
+      {2,6,3,0},
+      {2,6,3,6},
+    },
+    // R270
+    {
+      {0,4,1,0},
+      {0,4,1,2},
+      {6,2,1,2},
+      {6,2,1,4},
+      {6,4,1,2},
+      {6,4,1,6},
+    },
+    // L0
+    {
+      {2,0,7,0},
+      {2,0,7,4},
+      {2,6,7,4},
+      {2,6,7,6},
+      {4,0,1,2},
+      {4,0,3,2},
+      {4,0,7,2},
+      {4,0,7,4},
+    },
+    // L90
+    {
+      {0,4,1,0},
+      {0,4,5,0},
+      {0,4,5,6},
+      {0,6,5,0},
+      {2,6,5,0},
+      {2,6,5,2},
+      {2,6,5,4},
+      {2,6,5,6},
+    },
+    // L180
+    {
+      {0,4,3,0},
+      {0,4,3,6},
+      {0,4,7,6},
+      {6,2,3,0},
+      {6,2,3,2},
+      {6,4,3,0},
+      {6,4,3,4},
+    },
+    // L270
+    {
+      {4,0,1,2},
+      {4,0,1,4},
+      {4,0,5,4},
+      {4,2,1,4},
+      {6,2,1,0},
+      {6,2,1,2},
+      {6,2,1,4},
+      {6,2,1,6},
+    }
   };
 
   // VOC dataset average dimentions

@@ -17,19 +17,6 @@ using namespace Eigen;
 namespace perception
 {
 
-Points3D init_points3D(const std::array<float, 3> &dims)
-{
-  Points3D points3D = MatrixXf::Zero(8, 3);
-  return points3D;
-//    cnt = 0 
-//    for i in [1, -1]:
-//        for j in [1, -1]:
-//            for k in [1, -1]:
-//                points3D[cnt] = dims[[1, 0, 2]].T / 2.0 * [i, k, j * i]
-//                cnt += 1
-//    return points3D
-}
-
 tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn)
 {
   tensorflow::Status status;
@@ -99,7 +86,7 @@ void do_nms(vector<Yolo::Detection>& detections,int classes ,float nmsThresh)
             max(lbox[1] - lbox[3]/2.f , rbox[1] - rbox[3]/2.f), //top
             min(lbox[1] + lbox[3]/2.f , rbox[1] + rbox[3]/2.f), //bottom
         };
-        
+
         if(interBox[2] > interBox[3] || interBox[0] > interBox[1])
             return 0.0f;
 
@@ -160,14 +147,14 @@ vector<YoloBbox> postprocess_image(cv::Mat& img,vector<Yolo::Detection>& detecti
 
     //nms
     float nmsThresh = YOLO_NMS_THRESH;
-    if(nmsThresh > 0) 
+    if(nmsThresh > 0)
         do_nms(detections,classes,nmsThresh);
 
     vector<YoloBbox> boxes;
     for(const auto& item : detections)
     {
         auto& b = item.bbox;
-        YoloBbox bbox = 
+        YoloBbox bbox =
         { 
             item.classId,   //classId
             max(int((b[0]-b[2]/2.)*width),0), //left
@@ -194,9 +181,6 @@ vector<string> split(const string& str, char delim)
     return container;
 }
 
-// - image with 0, 100 driving area
-// - resize to orig size
-// - warpperspective
 cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H)
 {
     auto tr_mapped = tr.tensor<int, 3>();
@@ -231,20 +215,172 @@ void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
     img = _I;
 }
 
-//void compute_center()
-//{
+Points2D points3D_to_2D(const Points3D &pts3d,
+                        const Vector3f &center,
+                        const Matrix<float,3,3> &rot_M,
+                        const Matrix<float,3,4> &P)
+{
+  Points2D pts;
+  for (int i=0;i<pts3d.rows();++i)
+  {
+    Vector3f p3; Vector4f p4;
+    p3 = pts3d.row(i).transpose();
+    p3 = rot_M*p3 + center;
+    p4 << p3,1.;
+    p3 = P*p4;
+    pts(i,0) = p3(0)/p3(2);
+    pts(i,1) = p3(1)/p3(2);
+  }
+  return pts;
+}
 
-//def compute_center(points3D,rot_M,cam_to_img,box_2D, inds):
-//    fx = cam_to_img[0][0]
-//    fy = cam_to_img[1][1]
-//    u0 = cam_to_img[0][2]
-//    v0 = cam_to_img[1][2]
-//    W = np.array([[fx, 0, float(u0 - box_2D[0])],
-//                  [fx, 0, float(u0 - box_2D[2])],
-//                  [0, fy, float(v0 - box_2D[1])],
-//                  [0, fy, float(v0 - box_2D[3])]])
-//    U, Sigma, VT = np.linalg.svd(W)
+float compute_error(const Points2D &pts, const Vector4f &box_2D)
+{
+  Vector4f box_2D_new;
+  box_2D_new << pts.col(0).minCoeff(),
+                pts.col(1).minCoeff(),
+                pts.col(0).maxCoeff(),
+                pts.col(1).maxCoeff();
+  float error = (box_2D_new-box_2D).cwiseAbs().sum();
+  return error;
+}
 
-//}
+Points3D init_points3D(float h, float w, float l)
+{
+  Matrix<float,8,3> P3D;
+  int id = 0;
+  int ar[2]= {1,-1};
+  for (auto i: ar)
+  {
+    for (auto j: ar)
+    {
+      for (auto k: ar)
+      {
+        P3D(id,0) = w/2.0*i;
+        P3D(id,1) = h/2.0*k;
+        P3D(id,2) = l/2.0*j*i;
+        id+=1;
+      }
+    }
+  }
+  return P3D;
+}
 
+Vector3f compute_center(const Points3D &pts3d,
+                        const Matrix<float,3,3> &rot_M,
+                        const Matrix<float,3,4> &P,
+                        const Vector4f &box_2D,
+                        const int constants_id)
+{
+  float fx=P(0,0);
+  float fy=P(1,1);
+  float u0=P(0,2);
+  float v0=P(1,2);
+  MatrixXf A(4,3);
+  A << fx, 0., u0-box_2D(0),
+       fx, 0., u0-box_2D(2),
+       0., fy, v0-box_2D(1),
+       0., fy, v0-box_2D(3);
+
+  Vector3f center;
+  Vector3f result;
+  float err_min = 1e10;
+  for(auto &constraint : CONSTRAINTS[constants_id])
+  {
+    MatrixXf b(4,1);
+    for (int i=0; i<4; ++i)
+    {
+      Vector3f p3;
+      p3 = pts3d.row(constraint[i]);
+      p3 = rot_M*p3;
+      b(i) = box_2D(i)*P(2,3) - A.row(i).dot(p3) - P(i/2,3);
+    }
+    center = A.jacobiSvd(ComputeThinU | ComputeThinV).solve(b);
+    Points2D pts=points3D_to_2D(pts3d, center, rot_M, P);
+    float err = compute_error(pts, box_2D);
+    if ((err<err_min) and (center(2)>0))
+    {
+      result=center;
+      err_min=err;
+    }
+  }
+  return result;
+}
+
+bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P)
+{
+  float ray = bx.theta_ray;
+  float yaw = bx.yaw;
+  // sanity check
+  if (!(ray>0. && ray<M_PI))
+    return false;
+  if (!(yaw>-2*M_PI && yaw<2*M_PI))
+    return false;
+
+  Matrix<float,3,3> rot_M;
+  rot_M << cos(yaw),0.,sin(yaw),
+           0.,      1.,      0.,
+           sin(yaw),0.,cos(yaw);
+
+  float norm_yaw = (yaw>0) ? yaw : yaw+2*M_PI;
+
+  float deg0 = 0.;
+  float deg89 = 89.*(M_PI/180.);
+  float deg90 = 90.*(M_PI/180.);
+  float deg179 = 179.*(M_PI/180.);
+  float deg269 = 269.*(M_PI/180.);
+  int constants_id;
+  if (ray < deg90)
+  {
+    if (norm_yaw>deg0 && norm_yaw<deg89)
+      constants_id=0;
+    else if (norm_yaw>deg89 && norm_yaw<deg179)
+      constants_id=1;
+    else if (norm_yaw>deg179 && norm_yaw<deg269)
+      constants_id=2;
+    else
+      constants_id=3;
+  } else {
+    if (norm_yaw>deg0 && norm_yaw<deg89)
+      constants_id=4;
+    else if (norm_yaw>deg89 && norm_yaw<deg179)
+      constants_id=5;
+    else if (norm_yaw>deg179 && norm_yaw<deg269)
+      constants_id=6;
+    else
+      constants_id=7;
+  }
+  Points3D points3D = init_points3D(bx.h,bx.w,bx.l);
+  Vector4f box_2D;
+  box_2D << bx.xmin, bx.ymin, bx.xmax, bx.ymax;
+  Vector3f center = compute_center(points3D, rot_M, P, box_2D, constants_id);
+  bx.pts2d = points3D_to_2D(points3D, center, rot_M, P);
+  return true;
+}
+
+void draw_3D_box(cv::Mat &img, Points2D &pts)
+{
+  for (int i=0;i<4;++i)
+  {
+    cv::line(img,
+             cv::Point(pts(2*i,0),pts(2*i,1)),
+             cv::Point(pts(2*i+1,0),pts(2*i+1,1)),
+             cv::Scalar(0,255,0),2,8);
+  }
+  cv::line(img,
+           cv::Point(pts(0,0),pts(0,1)),
+           cv::Point(pts(7,0),pts(7,1)),
+           cv::Scalar(0,0,255),2,8);
+  cv::line(img,
+           cv::Point(pts(1,0),pts(1,1)),
+           cv::Point(pts(6,0),pts(6,1)),
+           cv::Scalar(0,0,255),2,8);
+  for (int i=0;i<8;++i)
+  {
+    cv::line(img,
+             cv::Point(pts(i,0),pts(i,1)),
+             cv::Point(pts(fmod(i+2,8),0),pts(fmod(i+2,8),1)),
+             cv::Scalar(0,255,0),2,8);
+  }
+}
 } // namespace perception
