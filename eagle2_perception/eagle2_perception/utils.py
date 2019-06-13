@@ -147,7 +147,6 @@ def points3D_to_2D(points3D,center,rot_M,cam_to_img):
         point2D = point[:2] / point[2]
         points2D.append(point2D)
     points2D = np.asarray(points2D)
-
     return points2D
 
 
@@ -195,17 +194,15 @@ def reproject_point(x, y, H):
             (H[2][0]*x + H[2][1]*y + H[2][2])
     return (x_bar, y_bar)
 
+
 def draw_3D_box(image,points):
     points = points.astype(np.int)
-
     for i in range(4):
         point_1_ = points[2 * i]
         point_2_ = points[2 * i + 1]
         cv2.line(image, (point_1_[0], point_1_[1]), (point_2_[0], point_2_[1]), (0, 255, 0), 2)
-
     cv2.line(image,tuple(points[0]),tuple(points[7]),(0, 0, 255), 2)
     cv2.line(image, tuple(points[1]), tuple(points[6]), (0, 0, 255), 2)
-
     for i in range(8):
         point_1_ = points[i]
         point_2_ = points[(i + 2) % 8]
@@ -253,11 +250,9 @@ def gen_3D_box(yaw,theta_ray,dims,cam_to_img,box_2D):
         constraints = IND_L270
 
     center = compute_center(points3D, rot_M, cam_to_img, box_2D, constraints)
-
     pts_projected = points3D_to_2D(points3D, center, rot_M, cam_to_img)
-    pts_world     = points3D_to_world(points3D, center, rot_M, cam_to_img)
-
-    return pts_projected, pts_world
+    pts_projected = pts_projected.astype(np.int)
+    return pts_projected
 
 
 def filter_only_voc_class(bboxes):
