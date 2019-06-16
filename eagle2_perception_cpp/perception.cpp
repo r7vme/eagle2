@@ -277,7 +277,11 @@ int main()
       //cv::Mat img(ENET_H, ENET_W, CV_8UC3);
       //label_image_to_color(enet_output[0], img);
       cv::Mat1b top_down = get_top_down_occupancy_array(enet_output[0], H);
-      cv::imwrite("1.jpg", frame_viz);
+      cv::namedWindow("window",CV_WINDOW_AUTOSIZE);
+      cv::imshow("window", frame_viz);
+      cv::namedWindow("top",CV_WINDOW_AUTOSIZE);
+      cv::imshow("top", top_down);
+      cv::waitKey(1);
     }
   }
   return 0;
