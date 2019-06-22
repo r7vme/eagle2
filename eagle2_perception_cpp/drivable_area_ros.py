@@ -14,9 +14,13 @@ import numpy as np
 import tensorflow as tf
 from tf.transformations import euler_from_quaternion
 
-H = np.array([[3.36202259e-03,1.26885519e-02,-2.34205816e+00],
-              [0.00000000e+0,2.53771038e-02,-3.99449824e+00],
-              [-0.00000000e+00,5.07542075e-05,-5.98899649e-03]])
+#H = np.array([[3.36202259e-03,1.26885519e-02,-2.34205816e+00],
+#              [0.00000000e+0,2.53771038e-02,-3.99449824e+00],
+#              [-0.00000000e+00,5.07542075e-05,-5.98899649e-03]])
+H = np.array([[ 3.38645324e-03,  2.11653327e-02, -2.46973307e+00],
+              [-0.00000000e+00,  4.23306655e-02, -4.23703446e+00],
+              [-0.00000000e+00,  8.46613310e-05, -6.47406891e-03]])
+
 
 bridge = CvBridge()
 
@@ -100,15 +104,14 @@ def on_image(msg):
         img = bridge.imgmsg_to_cv2(msg)
     else:
         img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-    img_orig = img.copy()
-    img_orig = cv2.resize(img_orig, (512, 256))
-    img_orig = cv2.warpPerspective(img_orig, H, (500, 500), borderValue=255)
+    img = cv2.resize(img, (512, 154))
+    img=cv2.copyMakeBorder(img,51,51,0,0,cv2.BORDER_CONSTANT, value=0)
     img = img.astype(np.float32, copy=False)
-    img = cv2.resize(img, (512, 256))
     img = (img - 128.) / 128.
     img = np.expand_dims(img, axis=0)
     pred = sess.run(tensors[1],feed_dict={tensors[0]: img})[0]
     pred = softmax(pred, axis=2)
+    pred = pred[51:205,:,:]
     pred = np.delete(pred, np.s_[1:20], axis=2)
     with np.nditer(pred, op_flags=['readwrite']) as it:
       for x in it:
