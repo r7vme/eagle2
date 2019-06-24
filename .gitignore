@@ -2,6 +2,15 @@
 __pycache__/
 *.py[cod]
 
+*.bin
+*.bag
+*.png
+*.jpg
+*.jpeg
+*.engine
+*.pb
+*.avi
+
 devel/
 logs/
 build/
