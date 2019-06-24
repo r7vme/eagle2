@@ -9,10 +9,12 @@
 #include <yaml-cpp/yaml.h>
 #include <YoloLayer.h>
 
+#include "bonnet.hpp"
 #include "utils.hpp"
 
 
 using namespace std;
+using namespace bonnet;
 using namespace perception;
 
 int main()
@@ -36,14 +38,23 @@ int main()
        K_vec[1][0],K_vec[1][1],K_vec[1][2],0.,
        K_vec[2][0],K_vec[2][1],K_vec[2][2],0.;
 
+  string bonnet_engine = config["bonnet_engine"].as<string>();
   string yolo_engine = config["yolo_engine"].as<string>();
   string box3d_pb = config["box3d_pb"].as<string>();
-  string enet_pb = config["enet_pb"].as<string>();
 
   // yolo (TensorRT)
-  unique_ptr<Tn::trtNet> net;
+  unique_ptr<Tn::trtNet> yolo;
   // TODO: it can fail silently, check if initialized.
-  net.reset(new Tn::trtNet(yolo_engine));
+  yolo.reset(new Tn::trtNet(yolo_engine));
+
+  // bonnet (TensorRT)
+  unique_ptr<Bonnet> bonnet;
+  bonnet.reset(new Bonnet(bonnet_engine));
+  if (!bonnet->initialized)
+  {
+    // TOOD: add log msg
+    return -1;
+  }
 
   // tensorflow session options
   tensorflow::SessionOptions tf_options;
@@ -55,13 +66,6 @@ int main()
   TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
   vector<string> b3d_tensors{"input_1","dimension/LeakyRelu",
                              "orientation/l2_normalize","confidence/Softmax"};
-
-  // enet (TensorFlow)
-  tensorflow::Session *enet_sess;
-  TF_CHECK_OK(tensorflow::NewSession(tf_options, &enet_sess));
-  TF_CHECK_OK(LoadModel(enet_sess, enet_pb));
-  vector<string> enet_tensors{"imgs_ph","early_drop_prob_ph",
-                              "late_drop_prob_ph","argmax_1"};
 
   cv::VideoCapture cap(cam_id);
   if (!cap.isOpened())
@@ -76,6 +80,7 @@ int main()
 
   cv::Mat frame;
   cv::Mat frame_viz;
+  cv::Mat bonnet_output;
   while(true)
   {
     if (!cap.read(frame))
@@ -86,10 +91,10 @@ int main()
 
     vector<float> input_data = prepare_image(frame);
 
-    int output_count = net->getOutputSize()/sizeof(float);
+    int output_count = yolo->getOutputSize()/sizeof(float);
     unique_ptr<float[]> output_data(new float[output_count]);
 
-    net->doInference(input_data.data(), output_data.get(), 1);
+    yolo->doInference(input_data.data(), output_data.get(), 1);
 
     //Get Output
     auto output = output_data.get();
@@ -228,60 +233,19 @@ int main()
       bboxes3d.push_back(bbox3d);
     }
 
-    // enet
-    // prepare inputs
-    tensorflow::Tensor enet_input(tensorflow::DT_FLOAT,
-      tensorflow::TensorShape({1, ENET_H, ENET_W, ENET_C}));
-    auto enet_input_mapped = enet_input.tensor<float, 4>();
-
-    cv::Mat enet_in;
-    cv::resize(frame, enet_in, cv::Size(ENET_W, ENET_H), 0, 0, CV_INTER_CUBIC);
-    enet_in.convertTo(enet_in, CV_32FC3);
-    subtract(enet_in,NORM_CITY,enet_in);
-
-    {
-      const float * source_data = (float*) enet_in.data;
-      // copying the data into the corresponding tensor
-      for (int y = 0; y < ENET_H; ++y) {
-        const float* source_row = source_data + (y * ENET_W * ENET_C);
-        for (int x = 0; x < ENET_W; ++x) {
-          const float* source_pixel = source_row + (x * ENET_C);
-          for (int c = 0; c < ENET_C; ++c) {
-            const float* source_value = source_pixel + c;
-            enet_input_mapped(0, y, x, c) = *source_value;
-          }
-        }
-      }
-    }
-    tensorflow::Tensor enet_input2(tensorflow::DT_FLOAT, tensorflow::TensorShape());
-    enet_input2.scalar<float>()() = 0.0;
-    tensorflow::Tensor enet_input3(tensorflow::DT_FLOAT, tensorflow::TensorShape());
-    enet_input3.scalar<float>()() = 0.0;
-
-    vector<tensorflow::Tensor> enet_output;
-    tensorflow::Status enet_status  = enet_sess->Run(
-      {
-        {enet_tensors[0], enet_input},
-        {enet_tensors[1], enet_input2},
-        {enet_tensors[2], enet_input3}
-      },
-      {enet_tensors[3]},
-      {},
-      &enet_output
-    );
-    if (!enet_status.ok())
-      continue;
+    // bonnet
+    bonnet->doInference(frame, bonnet_output);
 
     if (do_viz)
     {
       //cv::Mat img(ENET_H, ENET_W, CV_8UC3);
       //label_image_to_color(enet_output[0], img);
-      cv::Mat1b top_down = get_top_down_occupancy_array(enet_output[0], H);
-      cv::namedWindow("window",CV_WINDOW_AUTOSIZE);
-      cv::imshow("window", frame_viz);
-      cv::namedWindow("top",CV_WINDOW_AUTOSIZE);
-      cv::imshow("top", top_down);
-      cv::waitKey(1);
+      //cv::Mat1b top_down = get_top_down_occupancy_array(enet_output[0], H);
+      //cv::namedWindow("window",CV_WINDOW_AUTOSIZE);
+      //cv::imshow("window", frame_viz);
+      //cv::namedWindow("top",CV_WINDOW_AUTOSIZE);
+      //cv::imshow("top", top_down);
+      //cv::waitKey(1);
     }
   }
   return 0;

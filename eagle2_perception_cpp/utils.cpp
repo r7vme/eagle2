@@ -181,39 +181,23 @@ vector<string> split(const string& str, char delim)
     return container;
 }
 
-cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H)
-{
-    auto tr_mapped = tr.tensor<int, 3>();
-
-    cv::Mat1b img(ENET_H, ENET_W, 100);
-    for( int i = 0; i < ENET_H; ++i) {
-      for( int j = 0; j < ENET_W; ++j ) {
-        int label = tr_mapped(0, i, j);
-        if (label==0)
-          img(i,j) = 0;
-      }
-    }
-    cv::resize(img, img, cv::Size(CAM_W, CAM_H), 0, 0, CV_INTER_LINEAR);
-    cv::Mat1b top;
-    cv::warpPerspective(img, top, H, cv::Size(TOP_W, TOP_H), CV_INTER_LINEAR, cv::BORDER_CONSTANT);
-    return top;
-}
-
-void label_image_to_color(const tensorflow::Tensor tr, cv::Mat &img)
-{
-    CV_Assert(img.rows==ENET_H && img.cols==ENET_W);
-
-    auto tr_mapped = tr.tensor<int, 3>();
-
-    cv::Mat_<cv::Vec3b> _I = img;
-    for( int i = 0; i < ENET_H; ++i) {
-      for( int j = 0; j < ENET_W; ++j ) {
-        int label = tr_mapped(0, i, j);
-        _I(i,j) = ENET_LABEL_TO_COLOR[label];
-      }
-    }
-    img = _I;
-}
+//cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H)
+//{
+//    auto tr_mapped = tr.tensor<int, 3>();
+//
+//    cv::Mat1b img(ENET_H, ENET_W, 100);
+//    for( int i = 0; i < ENET_H; ++i) {
+//      for( int j = 0; j < ENET_W; ++j ) {
+//        int label = tr_mapped(0, i, j);
+//        if (label==0)
+//          img(i,j) = 0;
+//      }
+//    }
+//    cv::resize(img, img, cv::Size(CAM_W, CAM_H), 0, 0, CV_INTER_LINEAR);
+//    cv::Mat1b top;
+//    cv::warpPerspective(img, top, H, cv::Size(TOP_W, TOP_H), CV_INTER_LINEAR, cv::BORDER_CONSTANT);
+//    return top;
+//}
 
 Points2D points3D_to_2D(const Points3D &pts3d,
                         const Vector3f &center,

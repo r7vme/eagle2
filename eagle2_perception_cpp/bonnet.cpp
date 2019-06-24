@@ -19,6 +19,9 @@ namespace bonnet
 Bonnet::Bonnet(const string& engineFile)
 {
   string input_node="test_model/model/images/truediv";
+  // following additional ops were added
+  // y=tf.transpose(y, [0, 2, 3, 1],name="transpose_1")
+  // y=tf.nn.softmax(y, axis=3, name="softmax_1")
   string output_node="softmax_1";
   num_classes = 20;
   d = 3;
@@ -80,11 +83,11 @@ Bonnet::~Bonnet()
   cudaStreamDestroy(cuda_stream);
   for(auto& item : cuda_buffers)
       cudaFree(item);
-  if(!runtime)
+  if(runtime)
       runtime->destroy();
-  if(!context)
+  if(context)
       context->destroy();
-  if(!engine)
+  if(engine)
       engine->destroy();
 };
 
@@ -95,14 +98,16 @@ void Bonnet::doInference(const cv::Mat& image, cv::Mat& output)
   auto scaleSize = cv::Size(image.cols*scale,image.rows*scale);
   cv::Mat resized;
   cv::resize(image,resized,scaleSize,0,0,cv::INTER_LINEAR);
-  cv::Mat cropped(w, h, CV_8UC3, 127);
-  cv::Rect rect((w-scaleSize.width)/2, (h-scaleSize.height)/2, scaleSize.width, scaleSize.height);
-  resized.copyTo(cropped(rect));
+  cv::Rect roi((w-scaleSize.width)/2,
+               (h-scaleSize.height)/2,
+               scaleSize.width,
+               scaleSize.height);
 
-  // normalize
-  cv::Mat input;
-  cropped.convertTo(input, CV_32FC3);
-  input = (input - 128.0f) / 128.0f;
+  cv::Mat input(h, w, CV_8UC3, cv::Scalar(127,127,127));
+  resized.copyTo(input(roi));
+
+  // normalize to -1;1
+  input.convertTo(input, CV_32FC3, 1.f/128.f, -1.0f);
 
   vector<cv::Mat> input_chw(d);
   cv::split(input, input_chw);
@@ -126,29 +131,53 @@ void Bonnet::doInference(const cv::Mat& image, cv::Mat& output)
   cudaMemcpyAsync(cuda_buffers[inputIndex], input_chw_data.data(),
                   sizeof_in, cudaMemcpyHostToDevice, cuda_stream);
 
-
   // Enqueue the op
   context->enqueue(1, cuda_buffers, cuda_stream, nullptr);
 
   // Copy Output Data to the CPU memory
-  vector<float> output_chw(size_in_pix * num_classes);
-  cudaMemcpyAsync(output_chw.data(), cuda_buffers[outputIndex], sizeof_out,
+  cv::Mat softmax(cv::Size(w,h),CV_32FC(num_classes));
+  cudaMemcpyAsync(softmax.data, cuda_buffers[outputIndex], sizeof_out,
                   cudaMemcpyDeviceToHost, cuda_stream);
-
-
   // sync point
   cudaStreamSynchronize(cuda_stream);
 
-  float* slice_p = &output_chw[0];
-  output = cv::Mat(cv::Size(w, h), CV_32FC1, slice_p);
-  // TODO: crop top bottom
+  // extract only "road" label
+  cv::extractChannel(softmax, output, 0);
+  // remove top and bottom borders
+  output=output(roi);
+  output.convertTo(output, CV_8UC1, 100);
 }
 
 }
 
-int main()
-{
-using namespace bonnet;
-Bonnet bnet=Bonnet("bonnetFP32softmax.engine");
-cout<<bnet.initialized<<endl;
+// remove
+//int main()
+//{
+//using namespace bonnet;
+//
+//// bonnet (TensorRT)
+//unique_ptr<Bonnet> bonnet;
+//bonnet.reset(new Bonnet("bonnetFP32softmax.engine"));
+//if (!bonnet->initialized)
+//{
+//  // TOOD: add log msg
+//  return -1;
+//}
+//
+//cv::VideoCapture cap("kitti_06.avi");
+//if (!cap.isOpened())
+//   return -1;
+//
+//cv::Mat frame;
+//cv::Mat bonnet_output;
+//while(true)
+//{
+//  if (!cap.read(frame))
+//    continue;
+//  bonnet->doInference(frame, bonnet_output);
+//  //cv::namedWindow("window",CV_WINDOW_AUTOSIZE);
+//  //cv::imshow("window", bonnet_output);
+//  //cv::waitKey(1);
+//}
+
 }
