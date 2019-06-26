@@ -15,12 +15,18 @@ using namespace Eigen;
 namespace perception
 {
 
-  const int TOP_W = 500;
-  const int TOP_H = 500;
-  const float TOP_RESOLUTION = 0.1; // 10cm/px
+  const int   TOP1_W = 500;
+  const int   TOP1_H = 500;
+  const float TOP1_RES = 0.042;
+  const int   TOP2_W = 210;
+  const int   TOP2_H = 210;
+  const float TOP2_RES = 0.1; // 10cm/px
+  const float CAMERA_ORIGIN_X = 6.37; // meters
+  const float CAMERA_ORIGIN_Y = (TOP2_W/2)*TOP2_RES; // meters
   const int CAM_W = 1226;
   const int CAM_H = 370;
   const int CAM_FPS = 10;
+  const int ROAD_THRESH=70;
 
   // box3d
   typedef Matrix<float,8,3> Points3D;
@@ -56,7 +62,7 @@ namespace perception
                           const Vector4f &box_2D,
                           const int constants_id);
   float compute_error(const Points2D &pts, const Vector4f &box_2D);
-  void draw_3D_box(cv::Mat &img, Points2D &pts);
+  void draw_3D_box(cv::Mat &img, const Points2D &pts);
 
   // tensorflow utils
   tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);

@@ -199,6 +199,7 @@ vector<string> split(const string& str, char delim)
 //    return top;
 //}
 
+
 Points2D points3D_to_2D(const Points3D &pts3d,
                         const Vector3f &center,
                         const Matrix<float,3,3> &rot_M,
@@ -342,7 +343,7 @@ bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P)
   return true;
 }
 
-void draw_3D_box(cv::Mat &img, Points2D &pts)
+void draw_3D_box(cv::Mat &img, const Points2D &pts)
 {
   for (int i=0;i<4;++i)
   {

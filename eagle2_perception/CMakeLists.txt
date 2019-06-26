@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 project(eagle2_perception)
 
-# set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -D_GLIBCXX_USE_CXX11_ABI=0")
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
 
 # ROS
 find_package(catkin REQUIRED COMPONENTS
@@ -10,6 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   sensor_msgs
+  cv_bridge
+  image_transport
 )
 
 catkin_package(
@@ -18,6 +20,8 @@ catkin_package(
     roscpp
     std_msgs
     sensor_msgs
+    cv_bridge
+    image_transport
 )
 
 # tensorRTWrapper
@@ -27,8 +31,9 @@ include_directories(${TRT_WRAPPER_DIR}/include)
 
 # yaml
 set(YAML_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/yaml-cpp)
-set(YAML_CPP_BUILD_TESTS OFF)
-set(YAML_CPP_BUILD_CONTRIB OFF)
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Enable testing")
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Enable parse tools")
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "Enable contrib stuff in library")
 add_subdirectory(${YAML_DIR})
 include_directories(${YAML_DIR}/include)
 
@@ -54,14 +59,19 @@ find_library(NVPARSERS NAMES nvparsers)
 # eigen
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${catkin_INCLUDE_DIRS}
+)
 
 add_executable(eagle2_perception
-  perception.cpp
-  bonnet.cpp
-  utils.cpp
+  src/perception.cpp
+  src/bonnet.cpp
+  src/utils.cpp
 )
-target_link_libraries(perception TrtNet yaml-cpp Eigen3::Eigen ${OpenCV_LIBS} TensorFlow_DEP ${CUDA_LIBRARIES} nvinfer)
+target_link_libraries(eagle2_perception
+  ${catkin_LIBRARIES} TrtNet yaml-cpp Eigen3::Eigen TensorFlow_DEP nvinfer ${OpenCV_LIBS} ${CUDA_LIBRARIES}
+)
 
 install(TARGETS eagle2_perception
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

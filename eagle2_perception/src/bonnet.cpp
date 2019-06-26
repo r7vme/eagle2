@@ -149,35 +149,3 @@ void Bonnet::doInference(const cv::Mat& image, cv::Mat& output)
 }
 
 }
-
-// remove
-//int main()
-//{
-//using namespace bonnet;
-//
-//// bonnet (TensorRT)
-//unique_ptr<Bonnet> bonnet;
-//bonnet.reset(new Bonnet("bonnetFP32softmax.engine"));
-//if (!bonnet->initialized)
-//{
-//  // TOOD: add log msg
-//  return -1;
-//}
-//
-//cv::VideoCapture cap("kitti_06.avi");
-//if (!cap.isOpened())
-//   return -1;
-//
-//cv::Mat frame;
-//cv::Mat bonnet_output;
-//while(true)
-//{
-//  if (!cap.read(frame))
-//    continue;
-//  bonnet->doInference(frame, bonnet_output);
-//  //cv::namedWindow("window",CV_WINDOW_AUTOSIZE);
-//  //cv::imshow("window", bonnet_output);
-//  //cv::waitKey(1);
-//}
-
-}

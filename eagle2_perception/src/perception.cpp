@@ -10,9 +10,10 @@
 #include <YoloLayer.h>
 
 #include <ros/ros.h>
-#include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
+#include <nav_msgs/OccupancyGrid.h>
 
 #include "bonnet.hpp"
 #include "utils.hpp"
@@ -27,10 +28,25 @@ int main(int argc, char **argv)
   // ROS
   ros::init(argc, argv, "eagle2_perception");
   ros::NodeHandle nh;
-  sensor_msgs::CvBridge bridge;
-  ros::Publisher image_pub = n.advertise<sensor_msgs::Image>("image_rect_color", 1);
+  ros::NodeHandle priv_nh("~");
 
-  YAML::Node config = YAML::LoadFile("config.yaml");
+  string config_file;
+  priv_nh.param<string>("config_file", config_file, "config.yaml");
+
+  ros::Publisher image_pub = nh.advertise<sensor_msgs::Image>("image_rect_color", 1);
+  ros::Publisher map_pub   = nh.advertise<nav_msgs::OccupancyGrid>("drivable_area", 1);
+
+  YAML::Node config;
+  try
+  {
+    config = YAML::LoadFile(config_file);
+  }
+  catch (const YAML::BadFile&)
+  {
+    ROS_ERROR_STREAM("Failed to read config file at "<<config_file);
+    ros::shutdown();
+    return -1;
+  }
 
   // get config
   string cam_id               = config["cam_id"].as<string>();
@@ -67,6 +83,8 @@ int main(int argc, char **argv)
   if (!bonnet->initialized)
   {
     // TOOD: add log msg
+    ROS_ERROR("Failed to initialize bonnet");
+    ros::shutdown();
     return -1;
   }
 
@@ -92,19 +110,27 @@ int main(int argc, char **argv)
   // cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
 
   cv::Mat frame;
+  cv::Mat frame_raw;
   cv::Mat frame_viz;
   cv::Mat bonnet_output;
+  cv_bridge::CvImage ros_image;
+  nav_msgs::OccupancyGrid map_msg;
+  map_msg.data.resize(TOP2_W*TOP2_H);
   while(ros::ok())
   {
-    if (!cap.read(frame))
+    if (!cap.read(frame_raw))
     {
       continue;
     }
 
-    cv::undistort(frame, frame, K, D);
+    ros::Time frame_stamp=ros::Time::now();
+    cv::undistort(frame_raw, frame, K, D);
 
-    // publish image for other modules
-    image_pub.publish(bridge.cvToImgMsg(frame, "bgr8"));
+    ros_image.header.stamp=frame_stamp;
+    ros_image.header.frame_id=cam_frame_id;
+    ros_image.encoding="bgr8";
+    ros_image.image=frame;
+    image_pub.publish(ros_image.toImageMsg());
 
     // YOLO
     vector<float> input_data = prepare_image(frame);
@@ -176,6 +202,7 @@ int main(int argc, char **argv)
         }
       }
     }
+    auto t_start = chrono::high_resolution_clock::now();
     vector<tensorflow::Tensor> b3d_output;
     // running the loaded graph
     tensorflow::Status b3d_status  = b3d_sess->Run(
@@ -186,6 +213,9 @@ int main(int argc, char **argv)
     );
     if (!b3d_status.ok())
       continue;
+    auto t_end = chrono::high_resolution_clock::now();
+    float total = chrono::duration<float, milli>(t_end - t_start).count();
+    cout << "Time taken is " << total << " ms." << endl;
 
     vector<Bbox3D> bboxes3d;
     auto dimensions=b3d_output[0].tensor<float, 2>();
@@ -233,6 +263,55 @@ int main(int argc, char **argv)
 
     // bonnet
     bonnet->doInference(frame, bonnet_output);
+    // 1. H - Homography matrix was computed with calibrate.py for !!!512x154!!! --> 500x500
+    // 2. TOP1_RES - Resolution px/cm was computed using known size objects
+    // 3. TOP2_RES is desired resolution (All TOP2 values are derived from TOP1)
+    // 4. CAM_TO_BOTTOM_EDGE camera original position from bottom edge of image
+    //    was computed by using known height and assuming zero pitch and yaw
+    cv::Mat1b top;
+    cv::warpPerspective(bonnet_output, top, H,
+                        cv::Size(TOP1_W, TOP1_H),
+                        CV_INTER_LINEAR,
+                        cv::BORDER_CONSTANT, 255);
+    cv::resize(top, top, cv::Size(TOP2_W, TOP2_H), 0, 0);
+    cv::flip(top, top, 0);
+    map_msg.header.stamp = frame_stamp;
+    map_msg.header.frame_id = cam_frame_id;
+    map_msg.info.map_load_time = frame_stamp;
+    map_msg.info.resolution = TOP2_RES;
+    map_msg.info.width = TOP2_W;
+    map_msg.info.height = TOP2_H;
+    map_msg.info.origin.position.x = CAMERA_ORIGIN_X;
+    map_msg.info.origin.position.y = CAMERA_ORIGIN_Y;
+    map_msg.info.origin.position.z = 0.0;
+    map_msg.info.origin.orientation.x = 0.0;
+    map_msg.info.origin.orientation.y = 0.0;
+    map_msg.info.origin.orientation.z = -0.707;
+    map_msg.info.origin.orientation.w = 0.707;
+
+    uchar* p = top.data;
+    for( int i = 0; i < TOP2_W*TOP2_H; ++i)
+    {
+        int v=p[i];
+        if (v>100)
+        {
+          map_msg.data[i]=255;
+        }
+        else if (v>ROAD_THRESH)
+        {
+          map_msg.data[i]=0;
+        }
+        else
+        {
+          map_msg.data[i]=100;
+        }
+    }
+
+    map_pub.publish(map_msg);
+
+   // cv::namedWindow("top",CV_WINDOW_AUTOSIZE);
+   // cv::imshow("top",top);
+   // cv::waitKey(1);
 
     if (do_viz)
     {
