@@ -1,0 +1,42 @@
+<launch>
+  <!--
+  <node pkg="eagle2_perception" type="eagle2_perception" name="eagle2_perception" output="screen" >
+    <param name="config_file" value="$(find eagle2_perception)/cfg/config.yaml" />
+  </node>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_cam"
+        args="0 0.0 0.0 0.0 0.0 0.0 1.0 /map /camera" />
+
+  <node pkg="move_base" type="move_base" name="move_base" output="screen">
+    <rosparam file="$(find eagle2)/cfg/navigation.yaml" command="load" />
+  </node>
+  -->
+
+  <!-- teleoperation -->
+  <rosparam file="$(find eagle2)/cfg/joy.yaml" command="load" />
+  <node pkg="joy" type="joy_node" name="joy_node" />
+  <node pkg="eagle2" type="joy_teleop.py" name="joy_teleop" />
+  <group ns="vesc">
+    <include file="$(find eagle2)/launch/vesc.xml"/>
+  </group>
+
+  <!--
+  <include file="$(find ackermann_cmd_mux)/launch/standalone.launch">
+    <arg name="nodelet_manager_name" value="ackermann_cmd_mux_nodelet_manager" />
+    <arg name="config_file" value="$(find eagle2)/cfg/mux.yaml" />
+  </include>
+  <node name="map_server" pkg="map_server" type="map_server"
+    args="$(find eagle2)/cfg/map.yaml" output="screen" respawn="true" />
+
+  <include file="$(find eagle2)/launch/static_tf.xml"/>
+
+  <node pkg="razor_imu_9dof" type="imu_node.py" name="imu_node">
+    <param name="port" value="/dev/imu"/>
+  </node>
+
+  <node pkg="teb_local_planner" type="cmd_vel_to_ackermann_drive.py" name="cmd_vel_to_ackermann_drive" output="screen" respawn="true">
+    <param name="twist_cmd_topic" value="cmd_vel"/>
+    <param name="ackermann_cmd_topic" value="/ackermann_cmd_mux/input/navigation"/>
+    <param name="wheelbase" value="2.895"/>
+  </node>
+  -->
+</launch>

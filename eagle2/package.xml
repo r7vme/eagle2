@@ -6,4 +6,9 @@
   <maintainer email="rsokolkov@gmail.com">Roma Sokolkov</maintainer>
   <license>MIT</license>
   <buildtool_depend>catkin</buildtool_depend>
+  <depend>joy</depend>
+  <depend>map-server</depend>
+  <depend>teb-local-planner</depend>
+  <depend>teb-local-planner-tutorials</depend>
+  <!-- other dependencies in eagle2.rosinstall -->
 </package>
