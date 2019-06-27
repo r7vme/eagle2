@@ -11,14 +11,21 @@
   </node>
   <node pkg="eagle2" type="joy_teleop.py" name="joy_teleop" />
   <node pkg="joy" type="joy_node" name="joy_node" />
-  -->
 
-  <!-- teleoperation -->
   <rosparam file="$(find eagle2)/cfg/joy.yaml" command="load" />
   <group ns="vesc">
     <include file="$(find eagle2)/launch/vesc.xml"/>
   </group>
+  <node pkg="razor_imu_9dof" type="imu_node.py" name="imu_node">
+    <param name="port" value="/dev/imu"/>
+  </node>
+  -->
+
   <include file="$(find eagle2)/launch/static_tf.xml"/>
+  <arg name="lidar_config" default="$(find eagle2)/cfg/lidar.yaml" />
+  <node name="ydlidar_node"  pkg="ydlidar"  type="ydlidar_node" output="screen">
+    <rosparam file="$(arg lidar_config)" command="load"/>
+  </node>
 
   <!--
   <include file="$(find ackermann_cmd_mux)/launch/standalone.launch">
@@ -27,11 +34,6 @@
   </include>
   <node name="map_server" pkg="map_server" type="map_server"
     args="$(find eagle2)/cfg/map.yaml" output="screen" respawn="true" />
-
-
-  <node pkg="razor_imu_9dof" type="imu_node.py" name="imu_node">
-    <param name="port" value="/dev/imu"/>
-  </node>
 
   <node pkg="teb_local_planner" type="cmd_vel_to_ackermann_drive.py" name="cmd_vel_to_ackermann_drive" output="screen" respawn="true">
     <param name="twist_cmd_topic" value="cmd_vel"/>
