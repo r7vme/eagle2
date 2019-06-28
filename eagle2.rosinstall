@@ -3,3 +3,4 @@
 - git: {local-name: src/geometry2, version: 0.6.5, uri: 'https://github.com/ros/geometry2'}
 - git: {local-name: src/vision_opencv, version: 1.12.8, uri: 'https://github.com/ros-perception/vision_opencv'}
 - git: {local-name: src/lidar, version: 1.4.1, uri: 'https://github.com/YDLIDAR/ydlidar_ros'}
+- git: {local-name: src/ublox, version: master, uri: 'https://github.com/KumarRobotics/ublox'}

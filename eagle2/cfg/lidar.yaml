@@ -1,4 +1,5 @@
-port: /dev/ydlidar
+#port: /dev/ydlidar
+port: /dev/ttyUSB1
 baudrate: 128000
 model: X4
 #frame_id: laser_frame
