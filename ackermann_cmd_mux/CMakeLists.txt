@@ -11,8 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 # pkg-config support
-find_package(PkgConfig)
-pkg_search_module(yaml-cpp REQUIRED yaml-cpp)
+find_package(yaml-cpp REQUIRED)
 
 if(NOT ${yaml-cpp_VERSION} VERSION_LESS "0.5")
 add_definitions(-DHAVE_NEW_YAMLCPP)
