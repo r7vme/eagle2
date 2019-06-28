@@ -1,0 +1,8 @@
+<!--
+    TELEOPERATION
+-->
+<launch>
+  <rosparam file="$(find eagle2)/cfg/joy.yaml" command="load" />
+  <node pkg="eagle2" type="joy_teleop.py" name="joy_teleop" />
+  <node pkg="joy" type="joy_node" name="joy_node" />
+</launch>

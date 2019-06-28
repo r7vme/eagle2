@@ -1,32 +1,21 @@
 <launch>
   <!--
   -->
-  <rosparam file="$(find eagle2)/cfg/joy.yaml" command="load" />
-  <node pkg="eagle2" type="joy_teleop.py" name="joy_teleop" />
-  <node pkg="joy" type="joy_node" name="joy_node" />
-
   <group ns="vesc">
-    <include file="$(find eagle2)/launch/vesc.xml"/>
+    <include file="$(find eagle2)/launch/include/vesc.xml"/>
   </group>
-
-  <include file="$(find eagle2)/launch/static_tf.xml"/>
-  <include file="$(find eagle2)/launch/sensors/lidar.xml"/>
-  <include file="$(find eagle2)/launch/sensors/imu.xml"/>
-  <include file="$(find eagle2)/launch/sensors/gps.xml"/>
-
+  <include file="$(find eagle2)/launch/include/teleop.xml"/>
 
   <!--
-  <node pkg="eagle2_perception" type="eagle2_perception" name="eagle2_perception" output="screen" >
-    <param name="config_file" value="$(find eagle2_perception)/cfg/config.yaml" />
-  </node>
+
+  <include file="$(find eagle2)/launch/include/static_tf.xml"/>
+  <include file="$(find eagle2)/launch/include/lidar.xml"/>
+  <include file="$(find eagle2)/launch/include/imu.xml"/>
+  <include file="$(find eagle2)/launch/include/gps.xml"/>
 
   <node pkg="move_base" type="move_base" name="move_base" output="screen">
     <rosparam file="$(find eagle2)/cfg/navigation.yaml" command="load" />
   </node>
-  <include file="$(find ackermann_cmd_mux)/launch/standalone.launch">
-    <arg name="nodelet_manager_name" value="ackermann_cmd_mux_nodelet_manager" />
-    <arg name="config_file" value="$(find eagle2)/cfg/mux.yaml" />
-  </include>
   <node name="map_server" pkg="map_server" type="map_server"
     args="$(find eagle2)/cfg/map.yaml" output="screen" respawn="true" />
 

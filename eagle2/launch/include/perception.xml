@@ -1,0 +1,8 @@
+<!--
+        PERCEPTION.
+-->
+<launch>
+  <node pkg="eagle2_perception" type="eagle2_perception" name="eagle2_perception" output="screen" >
+    <param name="config_file" value="$(find eagle2_perception)/cfg/config.yaml" />
+  </node>
+</launch>

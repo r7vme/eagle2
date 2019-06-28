@@ -1,0 +1,46 @@
+<!--
+        Vedder Electronic Speed Controller (VESC) node.
+
+        VESC number of benefits over default RC car controllers:
+        - provides odometry information
+        - allows slow speeds (e.g. 0.25 m/s)
+        - allows servo
+-->
+<launch>
+  <node pkg="nodelet" type="nodelet" name="control_nodelet"
+        args="manager" output="screen"/>
+
+
+  <!-- vesc driver -->
+  <rosparam file="$(find eagle2)/cfg/vesc.yaml" command="load" />
+  <node pkg="nodelet" type="nodelet" name="vesc_driver"
+        args="load vesc_driver::VescDriverNodelet control_nodelet"/>
+
+  <!-- vesc odom and ackermann nodes -->
+  <node pkg="nodelet" type="nodelet" name="ackermann_to_vesc"
+        args="load vesc_ackermann::AckermannToVescNodelet control_nodelet" >
+    <remap from="ackermann_cmd" to="/to_vesc" />
+  </node>
+  <node pkg="nodelet" type="nodelet" name="vesc_to_odom"
+        args="load vesc_ackermann::VescToOdomNodelet control_nodelet"/>
+
+  <!-- input multiplexer -->
+  <node pkg="nodelet" type="nodelet" name="ackermann_cmd_mux"
+        args="load ackermann_cmd_mux/AckermannCmdMuxNodelet control_nodelet">
+    <param name="yaml_cfg_file" value="$(find eagle2)/cfg/mux.yaml"/>
+  </node>
+
+  <!--
+  <node name="throttle_interpolator" pkg="ackermann_cmd_mux" type="throttle_interpolator.py" />
+  <node pkg="vesc_ackermann" type="ackermann_to_vesc_node" name="ackermann_to_vesc">
+    <remap from="ackermann_cmd" to="/ackermann_cmd" />
+    <remap from="commands/motor/speed" to="commands/motor/unsmoothed_speed" />
+    <remap from="commands/servo/position" to="commands/servo/unsmoothed_position" />
+  </node>
+
+  <node pkg="vesc_driver" type="vesc_driver_node" name="vesc_driver" />
+  <node pkg="vesc_ackermann" type="vesc_to_odom_node" name="vesc_to_odom" />
+  <node name="throttle_interpolator" pkg="ackermann_cmd_mux" type="throttle_interpolator.py" />
+  -->
+
+</launch>

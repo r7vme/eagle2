@@ -1,4 +1,4 @@
-- git: {local-name: src/vesc, version: master, uri: 'https://github.com/mit-racecar/vesc.git'}
+- git: {local-name: src/vesc, version: master, uri: 'https://github.com/r7vme/vesc.git'}
 - git: {local-name: src/razor_imu_9dof, version: melodic-python3, uri: 'https://github.com/r7vme/razor_imu_9dof.git'}
 - git: {local-name: src/geometry2, version: 0.6.5, uri: 'https://github.com/ros/geometry2'}
 - git: {local-name: src/vision_opencv, version: 1.12.8, uri: 'https://github.com/ros-perception/vision_opencv'}
