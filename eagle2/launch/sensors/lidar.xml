@@ -1,0 +1,9 @@
+<!--
+        YDLIDAR 2D.
+-->
+<launch>
+  <arg name="lidar_config" default="$(find eagle2)/cfg/lidar.yaml" />
+  <node name="ydlidar_node"  pkg="ydlidar"  type="ydlidar_node" output="screen">
+    <rosparam file="$(arg lidar_config)" command="load"/>
+  </node>
+</launch>

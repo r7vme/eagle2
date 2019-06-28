@@ -4,3 +4,4 @@
 - git: {local-name: src/vision_opencv, version: 1.12.8, uri: 'https://github.com/ros-perception/vision_opencv'}
 - git: {local-name: src/lidar, version: 1.4.1, uri: 'https://github.com/YDLIDAR/ydlidar_ros'}
 - git: {local-name: src/ublox, version: master, uri: 'https://github.com/KumarRobotics/ublox'}
+#- git: {local-name: src/nmea_navsat_driver, version: nmea_navsat_driver-0.5.1, uri: 'https://github.com/ros-drivers/nmea_navsat_driver'}

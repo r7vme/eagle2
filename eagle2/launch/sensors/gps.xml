@@ -1,0 +1,24 @@
+<!--
+        GPS.
+-->
+<launch>
+  <node pkg="ublox_gps" type="ublox_gps" name="gps"
+        output="screen"
+        clear_params="true"
+        respawn="true"
+        respawn_delay="5">
+    <rosparam command="load"
+              file="$(find eagle2)/cfg/gps.yaml" />
+    <param name="config_on_startup" value="false"/>
+  </node>
+  <!-- 
+  <node name="nmea_serial_driver_node" pkg="nmea_navsat_driver" type="nmea_serial_driver"
+        output="screen" respawn="true">
+    <param name="port" value="/dev/ttyUSB0"/>
+    <param name="baud" value="14400" />
+    <param name="frame_id" value="gps" />
+    <param name="time_ref_source" value="gps" />
+    <param name="useRMC" value="False" />
+  </node>
+  -->
+</launch>
