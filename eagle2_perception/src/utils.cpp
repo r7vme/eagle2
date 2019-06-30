@@ -230,6 +230,16 @@ float compute_error(const Points2D &pts, const Vector4f &box_2D)
   return error;
 }
 
+// indexes of 3d box
+//
+//     7-----1
+//    /|    /|
+//   5-----3 |
+//   | 6---|-0
+//   |/    |/
+//   4-----2
+//
+// side 0176 is front (aka X axis)
 Points3D init_points3D(float h, float w, float l)
 {
   Matrix<float,8,3> P3D;
@@ -340,6 +350,9 @@ bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P)
   box_2D << bx.xmin, bx.ymin, bx.xmax, bx.ymax;
   Vector3f center = compute_center(points3D, rot_M, P, box_2D, constants_id);
   bx.pts2d = points3D_to_2D(points3D, center, rot_M, P);
+  // compute projection center of bbox in image coordinates
+  bx.proj_center_x = (bx.pts2d(0,0) + bx.pts2d(2,0) + bx.pts2d(4,0) + bx.pts2d(6,0)) / 4;
+  bx.proj_center_y = (bx.pts2d(0,1) + bx.pts2d(2,1) + bx.pts2d(4,1) + bx.pts2d(6,1)) / 4;
   return true;
 }
 
@@ -368,4 +381,19 @@ void draw_3D_box(cv::Mat &img, const Points2D &pts)
              cv::Scalar(0,255,0),2,8);
   }
 }
+
+tuple<int,int> reproject_to_ground(int x, int y, const cv::Mat &H)
+{
+  int x_bar = (H.at<float>(0,0)*x + H.at<float>(0,1)*y + H.at<float>(0,2)) /
+              (H.at<float>(2,0)*x + H.at<float>(2,1)*y + H.at<float>(2,2));
+  int y_bar = (H.at<float>(1,0)*x + H.at<float>(1,1)*y + H.at<float>(1,2)) /
+              (H.at<float>(2,0)*x + H.at<float>(2,1)*y + H.at<float>(2,2));
+  return make_tuple(x_bar, y_bar);
+}
+
+bool YoloBboxCompareDistance(const YoloBbox &lhs, const YoloBbox &rhs)
+{
+  return lhs.bot > rhs.bot;
+}
+
 } // namespace perception

@@ -14,19 +14,9 @@ using namespace Eigen;
 
 namespace perception
 {
-
-  const int   TOP1_W = 500;
-  const int   TOP1_H = 500;
-  const float TOP1_RES = 0.042;
-  const int   TOP2_W = 210;
-  const int   TOP2_H = 210;
-  const float TOP2_RES = 0.1; // 10cm/px
-  const float CAMERA_ORIGIN_X = 6.37; // meters
-  const float CAMERA_ORIGIN_Y = (TOP2_W/2)*TOP2_RES; // meters
-  const int CAM_W = 1226;
-  const int CAM_H = 370;
-  const int CAM_FPS = 10;
   const int ROAD_THRESH=70;
+  const int BONNET_INPUT_W=512;
+  const int BONNET_INPUT_H=256;
 
   // box3d
   typedef Matrix<float,8,3> Points3D;
@@ -39,6 +29,7 @@ namespace perception
   const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
   struct Bbox3D
   {
+      int label; // VOC
       float yaw;
       float theta_ray;
       float h;
@@ -48,6 +39,8 @@ namespace perception
       int ymin;
       int xmax;
       int ymax;
+      int proj_center_x;
+      int proj_center_y;
       Points2D pts2d;
   };
   bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P);
@@ -63,6 +56,7 @@ namespace perception
                           const int constants_id);
   float compute_error(const Points2D &pts, const Vector4f &box_2D);
   void draw_3D_box(cv::Mat &img, const Points2D &pts);
+  tuple<int,int> reproject_to_ground(int x, int y, const cv::Mat &H);
 
   // tensorflow utils
   tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);
@@ -88,6 +82,7 @@ namespace perception
   void do_nms(vector<Yolo::Detection>& detections, int classes, float nmsThresh);
   vector<YoloBbox> postprocess_image(cv::Mat& img, vector<Yolo::Detection>& detections, int classes);
   vector<string> split(const string& str, char delim);
+  bool YoloBboxCompareDistance(const YoloBbox &lhs, const YoloBbox &rhs);
 
   // box3d related
   // Indicies for 8 specific cases.

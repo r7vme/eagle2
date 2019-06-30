@@ -23,11 +23,15 @@ def rot_from_euler_4D(theta):
 #K = np.array([[7.070912000000e+02, 0.000000000000e+00, 6.018873000000e+02],
 #              [0.000000000000e+00, 7.070912000000e+02, 1.831104000000e+02],
 #              [0.000000000000e+00, 0.000000000000e+00, 1.000000000000e+00]])
-
 # rescaled 1226 x 370 --> 512 x 154
-K = np.array([[295.2942,           0.000000000000e+00, 251.3591],
-              [0.000000000000e+00, 295.2942,            76.4702],
+#K = np.array([[295.2942,           0.000000000000e+00, 251.3591],
+#              [0.000000000000e+00, 295.2942,            76.4702],
+#              [0.000000000000e+00, 0.000000000000e+00, 1.000000000000e+00]])
+# 800x448->458x256
+K = np.array([[340.3708227484727, 0.000000000000e+00, 223.38849228028752],
+              [0.000000000000e+00, 340.3708227484727, 118.51539112287317],
               [0.000000000000e+00, 0.000000000000e+00, 1.000000000000e+00]])
+
 fx = K[0][0]
 fy = K[1][1]
 u0 = K[0][2]
@@ -40,8 +44,8 @@ cv2.namedWindow("top", cv2.WINDOW_NORMAL)
 cv2.createTrackbar("C0", "top" , 250, 500, n)
 cv2.createTrackbar("C1", "top" , 0, 500, n)
 cv2.createTrackbar("T0", "top" , 0, 250, n)
-cv2.createTrackbar("T1", "top" , 60, 250, n)
-cv2.createTrackbar("T2", "top" , 730, 1000, n)
+cv2.createTrackbar("T1", "top" , 50, 250, n)
+cv2.createTrackbar("T2", "top" , 624, 1000, n)
 cv2.createTrackbar("pitch", "top" , 15, 30, n)
 while True:
     C0 = cv2.getTrackbarPos('C0','top')
@@ -70,11 +74,12 @@ while True:
     # Take inverted transformation
     H = np.linalg.inv(H)
 
-    frame = cv2.imread('006850-new.png')
-    frame = cv2.resize(frame, (512,154))
+    frame = cv2.imread('calib1.png')
+    frame = cv2.resize(frame, (458,256))
     dst = cv2.warpPerspective(frame,H,(500, 500))
     cv2.line(dst,(250, 0),(250, 500),(255,0,0),1)
     cv2.imshow("top", dst)
+    cv2.imwrite("top.png", dst)
     if cv2.waitKey(100) & 0xFF == ord('q'): break
 
 cv2.imwrite("top.png", dst)

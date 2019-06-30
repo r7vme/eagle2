@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   cv_bridge
   image_transport
+  jsk_recognition_msgs
 )
 
 catkin_package(
@@ -22,6 +23,7 @@ catkin_package(
     sensor_msgs
     cv_bridge
     image_transport
+    jsk_recognition_msgs
 )
 
 # tensorRTWrapper
