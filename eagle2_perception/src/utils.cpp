@@ -181,25 +181,6 @@ vector<string> split(const string& str, char delim)
     return container;
 }
 
-//cv::Mat1b get_top_down_occupancy_array(const tensorflow::Tensor tr, const cv::Mat& H)
-//{
-//    auto tr_mapped = tr.tensor<int, 3>();
-//
-//    cv::Mat1b img(ENET_H, ENET_W, 100);
-//    for( int i = 0; i < ENET_H; ++i) {
-//      for( int j = 0; j < ENET_W; ++j ) {
-//        int label = tr_mapped(0, i, j);
-//        if (label==0)
-//          img(i,j) = 0;
-//      }
-//    }
-//    cv::resize(img, img, cv::Size(CAM_W, CAM_H), 0, 0, CV_INTER_LINEAR);
-//    cv::Mat1b top;
-//    cv::warpPerspective(img, top, H, cv::Size(TOP_W, TOP_H), CV_INTER_LINEAR, cv::BORDER_CONSTANT);
-//    return top;
-//}
-
-
 Points2D points3D_to_2D(const Points3D &pts3d,
                         const Vector3f &center,
                         const Matrix<float,3,3> &rot_M,
@@ -219,7 +200,9 @@ Points2D points3D_to_2D(const Points3D &pts3d,
   return pts;
 }
 
-float compute_error(const Points2D &pts, const Vector4f &box_2D)
+// Computes Least Absolute Deviiation for estimated projection of 3D
+// and actual 2D bounding box.
+float compute_l1_error(const Points2D &pts, const Vector4f &box_2D)
 {
   Vector4f box_2D_new;
   box_2D_new << pts.col(0).minCoeff(),
@@ -227,7 +210,8 @@ float compute_error(const Points2D &pts, const Vector4f &box_2D)
                 pts.col(0).maxCoeff(),
                 pts.col(1).maxCoeff();
   float error = (box_2D_new-box_2D).cwiseAbs().sum();
-  return error;
+  float perimeter = 2*(abs(box_2D(0)-box_2D(2))+abs(box_2D(1)-box_2D(3)));
+  return error / perimeter;
 }
 
 // indexes of 3d box
@@ -261,11 +245,19 @@ Points3D init_points3D(float h, float w, float l)
   return P3D;
 }
 
-Vector3f compute_center(const Points3D &pts3d,
-                        const Matrix<float,3,3> &rot_M,
-                        const Matrix<float,3,4> &P,
-                        const Vector4f &box_2D,
-                        const int constants_id)
+// Major function in 3D bounding box estimation.
+// Tries to estimate bounding box center, by solving
+// system of linear quations (Ax=b) using SVD.
+//
+// It also iterates over offered constraints and selects
+// solution that produces smallest least absolute deviations (L1).
+//
+// Outputs tuple with center coordinates and error.
+tuple<Vector3f, float> compute_center(const Points3D &pts3d,
+                                      const Matrix<float,3,3> &rot_M,
+                                      const Matrix<float,3,4> &P,
+                                      const Vector4f &box_2D,
+                                      const int constants_id)
 {
   float fx=P(0,0);
   float fy=P(1,1);
@@ -292,16 +284,19 @@ Vector3f compute_center(const Points3D &pts3d,
     }
     center = A.jacobiSvd(ComputeThinU | ComputeThinV).solve(b);
     Points2D pts=points3D_to_2D(pts3d, center, rot_M, P);
-    float err = compute_error(pts, box_2D);
+    float err = compute_l1_error(pts, box_2D);
     if ((err<err_min) and (center(2)>0))
     {
       result=center;
       err_min=err;
     }
   }
-  return result;
+  return make_tuple(result, err_min);
 }
 
+// Estimates 3D bounding box. Depends on position of object
+// on the image different set of constraints will be selected,
+// instead of trying all constaraints.
 bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P)
 {
   float ray = bx.theta_ray;
@@ -346,10 +341,19 @@ bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P)
       constants_id=7;
   }
   Points3D points3D = init_points3D(bx.h,bx.w,bx.l);
+
+  // original 2d box
   Vector4f box_2D;
   box_2D << bx.xmin, bx.ymin, bx.xmax, bx.ymax;
-  Vector3f center = compute_center(points3D, rot_M, P, box_2D, constants_id);
+
+  // compute center
+  tuple<Vector3f,float> center_w_err = compute_center(points3D, rot_M, P, box_2D, constants_id);
+  Vector3f center = get<0>(center_w_err);
+  bx.estimation_error = get<1>(center_w_err);
+
+  // project to image
   bx.pts2d = points3D_to_2D(points3D, center, rot_M, P);
+
   // compute projection center of bbox in image coordinates
   bx.proj_center_x = (bx.pts2d(0,0) + bx.pts2d(2,0) + bx.pts2d(4,0) + bx.pts2d(6,0)) / 4;
   bx.proj_center_y = (bx.pts2d(0,1) + bx.pts2d(2,1) + bx.pts2d(4,1) + bx.pts2d(6,1)) / 4;

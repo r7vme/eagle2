@@ -258,6 +258,7 @@ int main(int argc, char **argv)
     if (!b3d_status.ok())
       continue;
 
+    // estimate 3D bounding box based on NN outputs
     vector<Bbox3D> bboxes3d;
     auto dimensions=b3d_output[0].tensor<float, 2>();
     auto orientation=b3d_output[1].tensor<float, 3>();
@@ -299,9 +300,22 @@ int main(int argc, char **argv)
       // hmm, just skip?
       if (!compute_3D_box(bbox3d, P))
         continue;
+
+      // filter boxes with big estimatation error
+      if (bbox3d.estimation_error > B3D_FILTER_ESTIMATION_ERROR)
+        continue;
+
+      // filter boxes vertical boxex near sides (this does not include people!!!)
+      bool vertical = (abs(bbox3d.xmin-bbox3d.xmax)/abs(bbox3d.ymin-bbox3d.ymax) < 1.0);
+      bool near_side = (((cam_width-bbox3d.xmax)<B3D_FILTER_SIDE_PX) or (bbox3d.xmin<B3D_FILTER_SIDE_PX));
+      if ((near_side) and (vertical))
+        continue;
+
       bboxes3d.push_back(bbox3d);
     }
-    // compute for pedestrians (assume yaw is zero)
+
+    // estimtate 3D bounding box for pedestrians (w/o NN outputs)
+    // for the sake of performance assumed yaw=0 and dimentions are average
     for(const auto& bbox: bboxes_peds)
     {
       Bbox3D bbox3d;
@@ -317,6 +331,7 @@ int main(int argc, char **argv)
       // hmm, just skip?
       if (!compute_3D_box(bbox3d, P))
         continue;
+
       bboxes3d.push_back(bbox3d);
     }
 

@@ -21,6 +21,8 @@ namespace perception
   // box3d
   typedef Matrix<float,8,3> Points3D;
   typedef Matrix<int,8,2> Points2D;
+  const float B3D_FILTER_ESTIMATION_ERROR = 0.2; // if esimated 3D box exceeds 2D more than ~20%
+  const float B3D_FILTER_SIDE_PX = 50; // near sides object is one that has edge <50px
   const int B3D_MAX_OBJECTS = 4;
   const int B3D_C = 3;
   const int B3D_W = 224;
@@ -41,6 +43,7 @@ namespace perception
       int ymax;
       int proj_center_x;
       int proj_center_y;
+      float estimation_error;
       Points2D pts2d;
   };
   bool compute_3D_box(Bbox3D &bx, const Matrix<float,3,4> &P);
@@ -49,12 +52,12 @@ namespace perception
                           const Vector3f &center,
                           const Matrix<float,3,3> &rot_M,
                           const Matrix<float,3,4> &P);
-  Vector3f compute_center(const Points3D &pts3d,
-                          const Matrix<float,3,3> &rot_M,
-                          const Matrix<float,3,4> &P,
-                          const Vector4f &box_2D,
-                          const int constants_id);
-  float compute_error(const Points2D &pts, const Vector4f &box_2D);
+  tuple<Vector3f,float> compute_center(const Points3D &pts3d,
+                                       const Matrix<float,3,3> &rot_M,
+                                       const Matrix<float,3,4> &P,
+                                       const Vector4f &box_2D,
+                                       const int constants_id);
+  float compute_l1_error(const Points2D &pts, const Vector4f &box_2D);
   void draw_3D_box(cv::Mat &img, const Points2D &pts);
   tuple<int,int> reproject_to_ground(int x, int y, const cv::Mat &H);
 
