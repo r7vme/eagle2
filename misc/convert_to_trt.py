@@ -29,6 +29,8 @@ if __name__ == "__main__":
   builder = trt.Builder(G_LOGGER)
   builder.max_batch_size = 1
   builder.max_workspace_size = 1 << 20
+  if data_type==trt.DataType.HALF:
+    builder.fp16_mode=True
   network = builder.create_network()
   parser = trt.UffParser()
   parser.register_input(input_node, trt.Dims([3, 256, 512]))
