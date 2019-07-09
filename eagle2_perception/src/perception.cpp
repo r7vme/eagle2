@@ -1,10 +1,6 @@
 #include <chrono>
 #include <math.h>
 #include <opencv2/opencv.hpp>
-#include <tensorflow/core/platform/env.h>
-#include <tensorflow/core/protobuf/meta_graph.pb.h>
-#include <tensorflow/core/public/session.h>
-#include <tensorflow/core/public/session_options.h>
 #include <TrtNet.h>
 #include <yaml-cpp/yaml.h>
 #include <YoloLayer.h>
@@ -19,11 +15,11 @@
 #include <jsk_recognition_msgs/BoundingBox.h>
 
 #include "bonnet.hpp"
+#include "box3d.hpp"
 #include "utils.hpp"
 
 
 using namespace std;
-using namespace bonnet;
 using namespace perception;
 
 int main(int argc, char **argv)
@@ -67,7 +63,7 @@ int main(int argc, char **argv)
   bool do_viz                  = config["do_viz"].as<bool>();
   string bonnet_engine         = config["bonnet_engine"].as<string>();
   string yolo_engine           = config["yolo_engine"].as<string>();
-  string box3d_pb              = config["box3d_pb"].as<string>();
+  string box3d_engine          = config["box3d_engine"].as<string>();
   vector<vector<float>> H_vec  = config["H"].as<vector<vector<float>>>();
   vector<vector<float>> K_vec  = config["K"].as<vector<vector<float>>>();
   vector<vector<float>> D_vec  = config["D"].as<vector<vector<float>>>();
@@ -93,7 +89,7 @@ int main(int argc, char **argv)
   // camera origin from topdown in meters
   float cam_origin_x = cam_height_from_ground*(fy/v0);
   float cam_origin_y = (top2_width/2)*top2_res;
-  float bonnet_scale = min(float(BONNET_INPUT_W)/cam_width,float(BONNET_INPUT_H)/cam_height);
+  float bonnet_scale = min(float(bonnet::W)/cam_width,float(bonnet::H)/cam_height);
 
   // yolo (TensorRT)
   unique_ptr<Tn::trtNet> yolo;
@@ -101,9 +97,9 @@ int main(int argc, char **argv)
   yolo.reset(new Tn::trtNet(yolo_engine));
 
   // bonnet (TensorRT)
-  unique_ptr<Bonnet> bonnet;
-  bonnet.reset(new Bonnet(bonnet_engine));
-  if (!bonnet->initialized)
+  unique_ptr<bonnet::Bonnet> bonnet_net;
+  bonnet_net.reset(new bonnet::Bonnet(bonnet_engine));
+  if (!bonnet_net->initialized)
   {
     // TOOD: add log msg
     ROS_ERROR("Failed to initialize bonnet");
@@ -111,14 +107,16 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  // box3d (TensorFlow)
-  tensorflow::SessionOptions tf_options;
-  tf_options.config.mutable_gpu_options()->set_allow_growth(true);
-  tensorflow::Session *b3d_sess;
-  TF_CHECK_OK(tensorflow::NewSession(tf_options, &b3d_sess));
-  TF_CHECK_OK(LoadModel(b3d_sess, box3d_pb));
-  vector<string> b3d_tensors{"input_1","dimension/LeakyRelu",
-                             "orientation/l2_normalize","confidence/Softmax"};
+  // box3d (TensorRT)
+  unique_ptr<box3d::Box3D> box3d_net;
+  box3d_net.reset(new box3d::Box3D(box3d_engine));
+  if (!box3d_net->initialized)
+  {
+    // TOOD: add log msg
+    ROS_ERROR("Failed to initialize box3d");
+    ros::shutdown();
+    return -1;
+  }
 
   // v4l camera capture. cam_id also can be just a path to a video
   cv::VideoCapture cap(cam_id);
@@ -148,12 +146,12 @@ int main(int argc, char **argv)
   map_msg.data.resize(top2_width*top2_height);
   while(ros::ok())
   {
+    auto t_start = chrono::high_resolution_clock::now();
     if (!cap.read(frame_raw))
     {
       continue;
     }
 
-    auto t_start = chrono::high_resolution_clock::now();
     ros::Time frame_stamp=ros::Time::now();
     cv::undistort(frame_raw, frame, K, D);
 
@@ -211,68 +209,58 @@ int main(int argc, char **argv)
     sort(bboxes.begin(), bboxes.end(), &YoloBboxCompareDistance);
 
     int batch_size;
-    if (bboxes.size()>B3D_MAX_OBJECTS)
+    if (bboxes.size()>box3d::MAX_BATCH_SIZE)
     {
-      batch_size = B3D_MAX_OBJECTS;
+      batch_size = box3d::MAX_BATCH_SIZE;
     } else {
       batch_size = bboxes.size();
     }
-    // prepare inputs
-    tensorflow::Tensor b3d_input(tensorflow::DT_FLOAT,
-      tensorflow::TensorShape({batch_size, B3D_H, B3D_W, B3D_C}));
-    auto b3d_input_mapped = b3d_input.tensor<float, 4>();
 
+    vector<float> b3d_input_data(batch_size * box3d::INPUT_SIZE);
+    vector<float> b3d_out_dims(batch_size * box3d::DIMS_SIZE);
+    vector<float> b3d_out_ori(batch_size * box3d::ORI_SIZE);
+    vector<float> b3d_out_conf(batch_size * box3d::CONF_SIZE);
     {
+      auto buf = b3d_input_data.data();
+      cv::Mat patch;
+      vector<cv::Mat> b3d_input_channels(box3d::C);
       for (int b = 0; b < batch_size; ++b) {
+        // prepare patch
         YoloBbox bbox = bboxes[b];
         cv::Rect patchRect(
           cv::Point(bbox.left,bbox.top),
           cv::Point(bbox.right,bbox.bot)
         );
-        cv::Mat patch;
-        cv::resize(frame(patchRect), patch, cv::Size(B3D_W, B3D_H), 0, 0, CV_INTER_CUBIC);
+        cv::resize(frame(patchRect), patch, cv::Size(box3d::W, box3d::H), 0, 0, CV_INTER_CUBIC);
         patch.convertTo(patch, CV_32FC3);
-        subtract(patch,NORM_CAFFE,patch);
-        const float * source_data = (float*) patch.data;
-        // copying the data into the corresponding tensor
-        for (int y = 0; y < B3D_H; ++y) {
-          const float* source_row = source_data + (y * B3D_W * B3D_C);
-          for (int x = 0; x < B3D_W; ++x) {
-            const float* source_pixel = source_row + (x * B3D_C);
-            for (int c = 0; c < B3D_C; ++c) {
-              const float* source_value = source_pixel + c;
-              b3d_input_mapped(b, y, x, c) = *source_value;
-            }
-          }
+        subtract(patch,NORM_CAFFE,patch); // Caffe norm
+        // split channels (HWC->CHW) and copy into buffer
+        split(patch, b3d_input_channels);
+        int channel_len = box3d::W * box3d::H;
+        for (int i = 0; i < box3d::C; ++i) {
+            memcpy(buf, b3d_input_channels[i].data, channel_len * sizeof(float));
+            buf += channel_len;
         }
       }
     }
-    vector<tensorflow::Tensor> b3d_output;
-    // running the loaded graph
-    tensorflow::Status b3d_status  = b3d_sess->Run(
-      {{b3d_tensors[0], b3d_input}},
-      {b3d_tensors[1], b3d_tensors[2], b3d_tensors[3]},
-      {},
-      &b3d_output
-    );
-    if (!b3d_status.ok())
-      continue;
+    if (batch_size > 0)
+    {
+      box3d_net->doInference(batch_size, b3d_input_data, b3d_out_dims,
+                             b3d_out_ori, b3d_out_conf);
+    }
 
     // estimate 3D bounding box based on NN outputs
     vector<Bbox3D> bboxes3d;
-    auto dimensions=b3d_output[0].tensor<float, 2>();
-    auto orientation=b3d_output[1].tensor<float, 3>();
-    auto confidence=b3d_output[2].tensor<float, 2>();
     for (int b = 0; b < batch_size; ++b)
     {
       // find bin ID with max confidence
-      Eigen::Matrix<float, B3D_BIN_NUM, 1> conf;
-      for (int i = 0; i < B3D_BIN_NUM; ++i)
-        conf[i]=confidence(b, i);
+      Eigen::Matrix<float, box3d::BIN_NUM, 1> conf;
+      for (int i = 0; i < box3d::BIN_NUM; ++i)
+        conf[i]=b3d_out_conf[b*box3d::CONF_SIZE+i];
 
       int max_a; conf.maxCoeff(&max_a);
-      float cos_v = orientation(b, max_a, 0);
-      float sin_v = orientation(b, max_a, 1);
+      float cos_v = b3d_out_ori[b*box3d::ORI_SIZE + max_a*2];
+      float sin_v = b3d_out_ori[b*box3d::ORI_SIZE + max_a*2 + 1];
 
       // compute yaw
       int xmin = bboxes[b].left;
@@ -281,16 +269,16 @@ int main(int argc, char **argv)
       int ymax = bboxes[b].bot;
       float theta_ray = atan2(fx, ((xmin+xmax)/2.)-u0);
       float angle_offset = (sin_v > 0.) ? acos(cos_v) : -acos(cos_v);
-      float wedge = (2.*M_PI)/B3D_BIN_NUM;
+      float wedge = (2.*M_PI)/box3d::BIN_NUM;
       float theta_loc = angle_offset + max_a * wedge;
       float theta = theta_loc + theta_ray;
       float yaw = fmod((M_PI/2)-theta, 2*M_PI); // make yaw in betwen [-2Pi,2Pi]
 
       // fill the values
       Bbox3D bbox3d;
-      bbox3d.h=dimensions(b, 0) + DIMS_AVG[bboxes[b].classId][0];
-      bbox3d.w=dimensions(b, 1) + DIMS_AVG[bboxes[b].classId][1];
-      bbox3d.l=dimensions(b, 2) + DIMS_AVG[bboxes[b].classId][2];
+      bbox3d.h=b3d_out_dims[b*box3d::DIMS_SIZE]     + DIMS_AVG[bboxes[b].classId][0];
+      bbox3d.w=b3d_out_dims[b*box3d::DIMS_SIZE + 1] + DIMS_AVG[bboxes[b].classId][1];
+      bbox3d.l=b3d_out_dims[b*box3d::DIMS_SIZE + 2] + DIMS_AVG[bboxes[b].classId][2];
       bbox3d.yaw=yaw;
       bbox3d.theta_ray=theta_ray;
       bbox3d.xmin=xmin;
@@ -336,7 +324,7 @@ int main(int argc, char **argv)
     }
 
     // bonnet
-    bonnet->doInference(frame, bonnet_output);
+    bonnet_net->doInference(frame, bonnet_output);
 
     jsk_recognition_msgs::BoundingBoxArray bbox_arr_msg;
     bbox_arr_msg.header.stamp = frame_stamp;
@@ -421,7 +409,6 @@ int main(int argc, char **argv)
     }
     auto t_end = chrono::high_resolution_clock::now();
     float total = chrono::duration<float, milli>(t_end - t_start).count();
-    ROS_INFO_STREAM("fps "<<1000/total);
 
     if (do_viz)
     {

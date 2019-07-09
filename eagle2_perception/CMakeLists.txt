@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.0)
-project(eagle2_perception)
+cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
+project(eagle2_perception LANGUAGES CXX CUDA)
 
 set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
+#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 # ROS
 find_package(catkin REQUIRED COMPONENTS
@@ -44,16 +46,6 @@ FIND_PACKAGE(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenCV_LIBRARIES_DIRS})
 
-# tensorflow
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-set(PYTHON_EXECUTABLE "python3")
-find_package(TensorFlow REQUIRED)
-TensorFlow_REQUIRE_C_LIBRARY()
-
-# cuda
-find_package(CUDA REQUIRED)
-include_directories(${CUDA_INCLUDE_DIRS})
-
 # tensorRT
 find_library(NVINFER NAMES nvinfer)
 find_library(NVPARSERS NAMES nvparsers)
@@ -61,18 +53,32 @@ find_library(NVPARSERS NAMES nvparsers)
 # eigen
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
+# tensorrt l2norm_helper plugin
+set(TRT_L2NORM_HELPER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/trt_l2norm_helper)
+add_subdirectory(${TRT_L2NORM_HELPER_DIR})
+
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${catkin_INCLUDE_DIRS}
+  ${TRT_L2NORM_HELPER_DIR}
+  ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
 add_executable(eagle2_perception
   src/perception.cpp
   src/bonnet.cpp
+  src/box3d.cpp
   src/utils.cpp
 )
 target_link_libraries(eagle2_perception
-  ${catkin_LIBRARIES} TrtNet yaml-cpp Eigen3::Eigen TensorFlow_DEP nvinfer ${OpenCV_LIBS} ${CUDA_LIBRARIES}
+  ${catkin_LIBRARIES}
+  Eigen3::Eigen
+  trt_l2norm_helper
+  TrtNet
+  yaml-cpp
+  nvinfer
+  ${OpenCV_LIBS}
+  ${CUDA_LIBRARIES}
 )
 
 install(TARGETS eagle2_perception

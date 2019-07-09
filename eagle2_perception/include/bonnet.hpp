@@ -9,6 +9,10 @@ using namespace nvinfer1;
 namespace bonnet
 {
 
+const int C=3;
+const int W=512;
+const int H=256;
+
 class BonnetLogger : public ILogger
 {
   void log(Severity severity, const char * msg) override

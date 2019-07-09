@@ -2,9 +2,6 @@
 #include <map>
 #include <opencv2/opencv.hpp>
 #include <TrtNet.h>
-#include <tensorflow/core/protobuf/meta_graph.pb.h>
-#include <tensorflow/core/public/session.h>
-#include <tensorflow/core/public/session_options.h>
 #include <YoloLayer.h>
 #include <Eigen/Dense>
 
@@ -15,19 +12,11 @@ using namespace Eigen;
 namespace perception
 {
   const int ROAD_THRESH=70;
-  const int BONNET_INPUT_W=512;
-  const int BONNET_INPUT_H=256;
-
   // box3d
   typedef Matrix<float,8,3> Points3D;
   typedef Matrix<int,8,2> Points2D;
   const float B3D_FILTER_ESTIMATION_ERROR = 0.2; // if esimated 3D box exceeds 2D more than ~20%
   const float B3D_FILTER_SIDE_PX = 50; // near sides object is one that has edge <50px
-  const int B3D_MAX_OBJECTS = 4;
-  const int B3D_C = 3;
-  const int B3D_W = 224;
-  const int B3D_H = 224;
-  const int B3D_BIN_NUM = 6;
   const map<int, int> COCO_TO_VOC = {{2,0},{5,1},{7,2},{0,3},{1,5},{6,6}};
   struct Bbox3D
   {
@@ -60,9 +49,6 @@ namespace perception
   float compute_l1_error(const Points2D &pts, const Vector4f &box_2D);
   void draw_3D_box(cv::Mat &img, const Points2D &pts);
   tuple<int,int> reproject_to_ground(int x, int y, const cv::Mat &H);
-
-  // tensorflow utils
-  tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn);
 
   // yolo
   struct YoloBbox

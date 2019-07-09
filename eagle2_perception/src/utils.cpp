@@ -1,9 +1,6 @@
 #include <chrono>
 #include <math.h>
 #include <opencv2/opencv.hpp>
-#include <tensorflow/core/protobuf/meta_graph.pb.h>
-#include <tensorflow/core/public/session.h>
-#include <tensorflow/core/public/session_options.h>
 #include <TrtNet.h>
 #include <YoloLayer.h>
 
@@ -16,22 +13,6 @@ using namespace Eigen;
 
 namespace perception
 {
-
-tensorflow::Status LoadModel(tensorflow::Session *sess, std::string graph_fn)
-{
-  tensorflow::Status status;
-
-  // Read in the protobuf graph we exported
-  tensorflow::GraphDef graph_def;
-  status = ReadBinaryProto(tensorflow::Env::Default(), graph_fn, &graph_def);
-  if (status != tensorflow::Status::OK()) return status;
-
-  // create the graph in the current session
-  status = sess->Create(graph_def);
-  if (status != tensorflow::Status::OK()) return status;
-
-  return tensorflow::Status::OK();
-}
 
 vector<float> prepare_image(cv::Mat& img)
 {

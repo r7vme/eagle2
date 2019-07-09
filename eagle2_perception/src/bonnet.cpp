@@ -9,6 +9,7 @@
 #include <NvInferPlugin.h>
 
 #include "bonnet.hpp"
+#include "common.hpp"
 
 using namespace std;
 using namespace nvinfer1;
@@ -44,7 +45,11 @@ Bonnet::Bonnet(const string& engineFile)
   file.close();
 
   // initialize plugins, required for LeakyRelu
-  if (!initLibNvInferPlugins(&logger, "")) return;
+  if (!initLibNvInferPlugins(&logger, ""))
+  {
+    cout<<"Can not initialize default plugins, "
+          "assuming already initialized by other instance."<<endl;
+  }
 
   // create engine
   runtime = createInferRuntime(logger);
@@ -67,10 +72,10 @@ Bonnet::Bonnet(const string& engineFile)
   // Allocate GPU memory for I/O
   cuda_buffers[inputIndex] = &input_gpu;
   cuda_buffers[outputIndex] = &output_gpu;
-  cudaMalloc(&cuda_buffers[inputIndex], sizeof_in);
-  cudaMalloc(&cuda_buffers[outputIndex], sizeof_out);
+  CUDA_CHECK(cudaMalloc(&cuda_buffers[inputIndex], sizeof_in));
+  CUDA_CHECK(cudaMalloc(&cuda_buffers[outputIndex], sizeof_out));
   // Use CUDA streams to manage the concurrency of copying and executing
-  cudaStreamCreate(&cuda_stream);
+  CUDA_CHECK(cudaStreamCreate(&cuda_stream));
 
   // we are good
   initialized=true;
@@ -79,10 +84,10 @@ Bonnet::Bonnet(const string& engineFile)
 Bonnet::~Bonnet()
 {
   // Release the stream and the buffers
-  cudaStreamSynchronize(cuda_stream);
-  cudaStreamDestroy(cuda_stream);
+  CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
+  CUDA_CHECK(cudaStreamDestroy(cuda_stream));
   for(auto& item : cuda_buffers)
-      cudaFree(item);
+      CUDA_CHECK(cudaFree(item));
   if(runtime)
       runtime->destroy();
   if(context)
@@ -128,18 +133,18 @@ void Bonnet::doInference(const cv::Mat& image, cv::Mat& output)
   }
 
   // Copy Input Data to the GPU memory
-  cudaMemcpyAsync(cuda_buffers[inputIndex], input_chw_data.data(),
-                  sizeof_in, cudaMemcpyHostToDevice, cuda_stream);
+  CUDA_CHECK(cudaMemcpyAsync(cuda_buffers[inputIndex], input_chw_data.data(),
+                             sizeof_in, cudaMemcpyHostToDevice, cuda_stream));
 
   // Enqueue the op
   context->enqueue(1, cuda_buffers, cuda_stream, nullptr);
 
   // Copy Output Data to the CPU memory
   cv::Mat softmax(cv::Size(w,h),CV_32FC(num_classes));
-  cudaMemcpyAsync(softmax.data, cuda_buffers[outputIndex], sizeof_out,
-                  cudaMemcpyDeviceToHost, cuda_stream);
+  CUDA_CHECK(cudaMemcpyAsync(softmax.data, cuda_buffers[outputIndex], sizeof_out,
+                             cudaMemcpyDeviceToHost, cuda_stream));
   // sync point
-  cudaStreamSynchronize(cuda_stream);
+  CUDA_CHECK(cudaStreamSynchronize(cuda_stream));
 
   // extract only "road" label
   cv::extractChannel(softmax, output, 0);
