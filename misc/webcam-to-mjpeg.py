@@ -10,11 +10,13 @@ cam.set(cv2.CAP_PROP_AUTOFOCUS, 0)
 cam.set(cv2.CAP_PROP_FOCUS, 0)
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
 cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 448)
-cam.set(cv2.CAP_PROP_FPS, 10)
+cam.set(cv2.CAP_PROP_FPS, 30)
+#cam.set(cv2.CAP_PROP_AUTO_WB, 0)
+#cam.set(cv2.CAP_PROP_WB_TEMPERATURE, 4000)
 
 # video writer
 fourcc=cv2.VideoWriter_fourcc(*"MJPG")
-out = cv2.VideoWriter(name,fourcc, 10.0, (800,448))
+out = cv2.VideoWriter(name,fourcc, 30.0, (800,448))
 
 while (cam.isOpened()):
   ret, img = cam.read()
