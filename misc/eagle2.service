@@ -1,0 +1,13 @@
+[Unit]
+Description=eagle2
+
+[Service]
+User=r7vme
+Restart=always
+ExecStart=/bin/bash -c "\
+  source /opt/ros/melodic/setup.bash ; \
+  source /home/r7vme/catkin_ws/devel/setup.bash ; \
+  roslaunch --screen eagle2 eagle2.xml"
+
+[Install]
+WantedBy=multi-user.target
