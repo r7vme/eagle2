@@ -64,8 +64,10 @@ include_directories(
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
+# perception executable
 add_executable(eagle2_perception
   src/perception.cpp
+  src/perception_node.cpp
   src/bonnet.cpp
   src/box3d.cpp
   src/utils.cpp

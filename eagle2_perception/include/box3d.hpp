@@ -1,3 +1,4 @@
+#pragma once
 #include <stdlib.h>
 // Nvidia stuff
 #include <cuda.h>

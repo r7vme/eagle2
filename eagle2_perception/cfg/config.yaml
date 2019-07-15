@@ -2,12 +2,13 @@ yolo_engine: /eagle2/yolov3_fp16.engine
 box3d_engine: /eagle2/box3dFP16.engine
 bonnet_engine: /eagle2/bonnetFP32softmax.engine
 cam_frame_id: "camera"
-cam_id: "/eagle2/video1561743866.avi"
+cam_id: "/eagle2/video1563129590.avi"
 #cam_id: "/eagle2/output1.avi"
 cam_width: 800
 cam_height: 448
 cam_height_from_ground: 0.95 # meters
 cam_fps: 10
+cam_fps_force: true
 do_viz: true
 use_ros: false
 # values that homography matrix was done
