@@ -56,7 +56,8 @@ set(BUILD_DEPS "YES" CACHE BOOL "If YES, will install dependencies into sandbox.
 # endif()
 list(APPEND CUDA_NVCC_FLAGS "-D_FORCE_INLINES -Xcompiler -fPIC")
 CUDA_INCLUDE_DIRECTORIES(${CUDNN_INCLUDE_DIR} ${TENSORRT_INCLUDE_DIR})
-CUDA_ADD_LIBRARY(TrtNet STATIC ${PLUGIN_SOURCES})
+# Build as shared library
+CUDA_ADD_LIBRARY(TrtNet ${PLUGIN_SOURCES})
 
 target_include_directories(TrtNet PUBLIC ${CUDA_INCLUDE_DIRS} ${TENSORRT_INCLUDE_DIR} ${CUDNN_INCLUDE_DIR})
 target_link_libraries(TrtNet ${TENSORRT_LIBRARY})

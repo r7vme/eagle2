@@ -1,0 +1,5 @@
+<library path="lib/libeagle2_perception_nodelet">
+  <class type="perception::EPerceptionNodelet" base_class_type="nodelet::Nodelet">
+    <description>Nodelet for perception pipeline.</description>
+  </class>
+</library>

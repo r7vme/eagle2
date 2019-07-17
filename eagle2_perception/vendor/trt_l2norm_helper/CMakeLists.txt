@@ -35,6 +35,10 @@ add_library(trt_l2norm_helper STATIC
   l2norm_helper.cpp
   l2norm_helper.cu
 )
+# Allow building shared libraries with this one
+set_target_properties(trt_l2norm_helper
+  PROPERTIES POSITION_INDEPENDENT_CODE ON
+)
 target_link_libraries(trt_l2norm_helper
   ${TENSORRT_LIBRARY}
 )

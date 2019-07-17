@@ -8,6 +8,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 # ROS
 find_package(catkin REQUIRED COMPONENTS
+  nodelet
+  pluginlib
   cmake_modules
   roscpp
   std_msgs
@@ -20,6 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS
+    nodelet
+    pluginlib
     roscpp
     std_msgs
     sensor_msgs
@@ -64,15 +68,7 @@ include_directories(
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 
-# perception executable
-add_executable(eagle2_perception
-  src/perception.cpp
-  src/perception_node.cpp
-  src/bonnet.cpp
-  src/box3d.cpp
-  src/utils.cpp
-)
-target_link_libraries(eagle2_perception
+set(EAGLE2_PERCEPTION_TARGET_LIBS
   ${catkin_LIBRARIES}
   Eigen3::Eigen
   trt_l2norm_helper
@@ -83,8 +79,36 @@ target_link_libraries(eagle2_perception
   ${CUDA_LIBRARIES}
 )
 
+# perception executable
+add_executable(eagle2_perception
+  src/perception.cpp
+  src/perception_node.cpp
+  src/bonnet.cpp
+  src/box3d.cpp
+  src/utils.cpp
+)
+target_link_libraries(eagle2_perception
+  ${EAGLE2_PERCEPTION_TARGET_LIBS}
+)
+# perception nodelet
+add_library(eagle2_perception_nodelet
+  src/perception.cpp
+  src/perception_node.cpp
+  src/perception_nodelet.cpp
+  src/bonnet.cpp
+  src/box3d.cpp
+  src/utils.cpp
+)
+add_dependencies(eagle2_perception_nodelet ${catkin_EXPORTED_TARGETS})
+target_link_libraries(eagle2_perception_nodelet
+  ${EAGLE2_PERCEPTION_TARGET_LIBS}
+)
+
 install(TARGETS eagle2_perception
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+install(TARGETS eagle2_perception_nodelet
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
 install(DIRECTORY launch/
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
