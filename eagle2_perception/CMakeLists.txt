@@ -90,11 +90,22 @@ add_executable(eagle2_perception
 target_link_libraries(eagle2_perception
   ${EAGLE2_PERCEPTION_TARGET_LIBS}
 )
+# camera_publisher executable
+add_executable(eagle2_camera_publisher
+  src/camera_publisher.cpp
+  src/camera_publisher_node.cpp
+)
+target_link_libraries(eagle2_camera_publisher
+  ${catkin_LIBRARIES}
+  yaml-cpp
+  ${OpenCV_LIBS}
+)
 # perception nodelet
 add_library(eagle2_perception_nodelet
   src/perception.cpp
-  src/perception_node.cpp
   src/perception_nodelet.cpp
+  src/camera_publisher.cpp
+  src/camera_publisher_nodelet.cpp
   src/bonnet.cpp
   src/box3d.cpp
   src/utils.cpp

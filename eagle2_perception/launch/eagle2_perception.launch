@@ -1,17 +1,12 @@
 <launch>
-  <!-- Nodelet manager -->
-  <node pkg="nodelet" type="nodelet" name="eagle2_perception_manager" args="manager" output="screen">
-     <param name="num_worker_threads" value="4" />
-  </node>
-  <node pkg="nodelet" type="nodelet" name="eagle2_perception_nodelet"
-        args="load perception::EPerceptionNodelet eagle2_perception_manager" >
+  <node pkg="eagle2_perception" type="eagle2_perception"
+        name="eagle2_perception" output="screen" >
     <param name="config_file" value="$(find eagle2_perception)/cfg/config.yaml" />
   </node>
-  <!--
-  <node pkg="eagle2_perception" type="eagle2_perception" name="eagle2_perception" output="screen" >
+  <node pkg="eagle2_perception" type="eagle2_camera_publisher"
+        name="eagle2_camera_publisher" output="screen" >
     <param name="config_file" value="$(find eagle2_perception)/cfg/config.yaml" />
   </node>
   <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_cam"
         args="0 0.0 0.0 0.0 0.0 0.0 1.0 /map /camera" />
-  -->
 </launch>

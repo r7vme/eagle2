@@ -2,4 +2,7 @@
   <class type="perception::EPerceptionNodelet" base_class_type="nodelet::Nodelet">
     <description>Nodelet for perception pipeline.</description>
   </class>
+  <class type="perception::ECameraPublisherNodelet" base_class_type="nodelet::Nodelet">
+    <description>Nodelet for camera images publishing.</description>
+  </class>
 </library>

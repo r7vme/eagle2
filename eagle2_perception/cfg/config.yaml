@@ -7,8 +7,8 @@ cam_id: "/eagle2/video1563129590.avi"
 cam_width: 800
 cam_height: 448
 cam_height_from_ground: 0.95 # meters
-cam_fps: 10
-cam_fps_force: true
+cam_fps: 30
+cam_delay: 0.0 # 130ms
 do_viz: true
 use_ros: false
 # values that homography matrix was done

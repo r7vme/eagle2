@@ -67,9 +67,9 @@ namespace perception
   const int YOLO_H = 416;
   const int YOLO_NUM_CLS = 80;
   const float YOLO_NMS_THRESH = 0.45;
-  vector<float> prepare_image(cv::Mat& img);
+  vector<float> prepare_image(const cv::Mat& img);
   void do_nms(vector<Yolo::Detection>& detections, int classes, float nmsThresh);
-  vector<YoloBbox> postprocess_image(cv::Mat& img, vector<Yolo::Detection>& detections, int classes);
+  vector<YoloBbox> postprocess_image(const cv::Mat& img, vector<Yolo::Detection>& detections, int classes);
   vector<string> split(const string& str, char delim);
   bool YoloBboxCompareDistance(const YoloBbox &lhs, const YoloBbox &rhs);
 

@@ -14,7 +14,7 @@ using namespace Eigen;
 namespace perception
 {
 
-vector<float> prepare_image(cv::Mat& img)
+vector<float> prepare_image(const cv::Mat& img)
 {
     int h=YOLO_H; int w=YOLO_W; int c=YOLO_C;
 
@@ -106,7 +106,10 @@ void do_nms(vector<Yolo::Detection>& detections,int classes ,float nmsThresh)
 }
 
 
-vector<YoloBbox> postprocess_image(cv::Mat& img,vector<Yolo::Detection>& detections,int classes)
+vector<YoloBbox> postprocess_image(
+  const cv::Mat& img,
+  vector<Yolo::Detection>& detections,
+  int classes)
 {
     int h=YOLO_H; int w=YOLO_W;
 

@@ -15,22 +15,19 @@
 #include <jsk_recognition_msgs/BoundingBox.h>
 
 #include "perception.hpp"
-
 #include "bonnet.hpp"
 #include "box3d.hpp"
 #include "utils.hpp"
-
 
 using namespace std;
 
 namespace perception
 {
 
-EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh)
+EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh): it_(nh)
 {
   priv_nh.param<string>("config_file", config_file_, "config.yaml");
 
-  image_pub_ = nh.advertise<sensor_msgs::Image>("image_rect_color", 1);
   map_pub_   = nh.advertise<nav_msgs::OccupancyGrid>("drivable_area", 1);
   bbox_pub_  = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("bboxes", 1);
 
@@ -48,12 +45,10 @@ EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh)
 
   // get config
   // TODO: catch YAML expection
-  cam_id_                     = config["cam_id"].as<string>();
   cam_frame_id_               = config["cam_frame_id"].as<string>();
   cam_width_                  = config["cam_width"].as<int>();
   cam_height_                 = config["cam_height"].as<int>();
   cam_height_from_ground_     = config["cam_height_from_ground"].as<float>();
-  cam_fps_                    = config["cam_fps"].as<int>();
   top_width_                  = config["top_width"].as<int>();
   top_height_                 = config["top_height"].as<int>();
   top_res_                    = config["top_res"].as<float>();
@@ -64,12 +59,10 @@ EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh)
   string box3d_engine         = config["box3d_engine"].as<string>();
   vector<vector<float>> H_vec = config["H"].as<vector<vector<float>>>();
   vector<vector<float>> K_vec = config["K"].as<vector<vector<float>>>();
-  vector<vector<float>> D_vec = config["D"].as<vector<vector<float>>>();
 
   // prepare CV matrices
   H_ = toMat(H_vec);
   K_ = toMat(K_vec);
-  D_ = toMat(D_vec);
   fx_ = K_.at<float>(0,0);
   fy_ = K_.at<float>(1,1);
   u0_ = K_.at<float>(0,2);
@@ -115,41 +108,30 @@ EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh)
     return;
   }
 
-  // v4l camera capture. cam_id also can be just a path to a video
-  cap_.open(cam_id_);
-  if (!cap_.isOpened())
-  {
-    ros::shutdown();
-    return;
-  }
-  cap_.set(cv::CAP_PROP_AUTOFOCUS, 0);
-  cap_.set(cv::CAP_PROP_FOCUS, 0);
-  cap_.set(cv::CAP_PROP_FPS, cam_fps_);
-  cap_.set(cv::CAP_PROP_FRAME_WIDTH, cam_width_);
-  cap_.set(cv::CAP_PROP_FRAME_HEIGHT, cam_height_);
-  // only from 4.2
-  // cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+  // finally subscribe to images
+  image_sub_ = it_.subscribe("image", 1, &EPerception::imageCallback, this);
 }
 
-void EPerception::timerCallback(const ros::TimerEvent& event)
+void EPerception::imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
-  auto t_start = chrono::high_resolution_clock::now();
-  if (!cap_.read(frame_raw_))
+  try
   {
+    bridge_ = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
 
-  ros::Time frame_stamp=ros::Time::now();
-  cv::undistort(frame_raw_, frame_, K_, D_);
+  // zero-copy
+  const cv::Mat frame=bridge_->image;
 
-  ros_image_.header.stamp=frame_stamp;
-  ros_image_.header.frame_id=cam_frame_id_;
-  ros_image_.encoding="bgr8";
-  ros_image_.image=frame_;
-  image_pub_.publish(ros_image_.toImageMsg());
+  auto t_start = chrono::high_resolution_clock::now();
+  ros::Time frame_stamp=msg->header.stamp;
 
   // YOLO
-  vector<float> input_data = prepare_image(frame_);
+  vector<float> input_data = prepare_image(frame);
   int output_count = yolo_->getOutputSize()/sizeof(float);
   unique_ptr<float[]> output_data(new float[output_count]);
 
@@ -163,7 +145,7 @@ void EPerception::timerCallback(const ros::TimerEvent& event)
   vector<Yolo::Detection> result;
   result.resize(detCount);
   memcpy(result.data(), &output[1], detCount*sizeof(Yolo::Detection));
-  auto bboxes_all = postprocess_image(frame_, result, YOLO_NUM_CLS);
+  auto bboxes_all = postprocess_image(frame, result, YOLO_NUM_CLS);
 
   // 3D part that estimates 3d bounding boxes:
   // - estimate only cars, because we have compute limited capacity
@@ -218,7 +200,7 @@ void EPerception::timerCallback(const ros::TimerEvent& event)
         cv::Point(bbox.left,bbox.top),
         cv::Point(bbox.right,bbox.bot)
       );
-      cv::resize(frame_(patchRect), patch, cv::Size(box3d::W, box3d::H), 0, 0, CV_INTER_CUBIC);
+      cv::resize(frame(patchRect), patch, cv::Size(box3d::W, box3d::H), 0, 0, CV_INTER_CUBIC);
       patch.convertTo(patch, CV_32FC3);
       subtract(patch,NORM_CAFFE,patch); // Caffe norm
       // split channels (HWC->CHW) and copy into buffer
@@ -311,7 +293,7 @@ void EPerception::timerCallback(const ros::TimerEvent& event)
   }
 
   // bonnet
-  bonnet_net_->doInference(frame_, bonnet_output_);
+  bonnet_net_->doInference(frame, bonnet_output_);
 
   jsk_recognition_msgs::BoundingBoxArray bbox_arr_msg;
   bbox_arr_msg.header.stamp = frame_stamp;
@@ -342,6 +324,7 @@ void EPerception::timerCallback(const ros::TimerEvent& event)
   map_msg_.info.origin.orientation.y = 0.0;
   map_msg_.info.origin.orientation.z = -0.707;
   map_msg_.info.origin.orientation.w = 0.707;
+  map_msg_.data.reserve(top2_width_*top2_height_);
   uchar* p = top.data;
   for( int i = 0; i < top2_width_*top2_height_; ++i)
   {
@@ -399,7 +382,7 @@ void EPerception::timerCallback(const ros::TimerEvent& event)
 
   if (do_viz_)
   {
-    frame_viz_ = frame_.clone();
+    frame_viz_ = frame.clone();
 
     //draw YOLO boxes on image
     for(const auto& bbox: bboxes)
