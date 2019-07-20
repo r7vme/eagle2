@@ -46,6 +46,9 @@ add_subdirectory(${YAML_DIR})
 include_directories(${YAML_DIR}/include)
 
 # opencv
+# NOTE: opencv should be compiled with CUDA support,
+# Default Jetpack opencv has no CUDA support.
+# How to recomplie https://github.com/jetsonhacks/buildOpenCVXavier
 FIND_PACKAGE(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenCV_LIBRARIES_DIRS})
