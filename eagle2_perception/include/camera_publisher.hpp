@@ -45,6 +45,11 @@ private:
   cv::Mat K_;
   cv::Mat D_;
 
+  // undistortGPU related
+  cv::Mat xmap_, ymap_;
+  cv::cuda::GpuMat xmapG_, ymapG_;
+  cv::cuda::GpuMat inputG_, outputG_;
+
   cv::VideoCapture cap_;
   cv::Mat frame_;
   cv_bridge::CvImage bridge_;
@@ -56,6 +61,9 @@ private:
 
   // ROS callbacks
   void timerCallback(const ros::TimerEvent& event);
+
+  // helpers
+  void undistortGPU();
 };
 
 } // namespace perception

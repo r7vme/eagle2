@@ -63,6 +63,20 @@ ECameraPublisher::ECameraPublisher(ros::NodeHandle nh, ros::NodeHandle priv_nh):
   timer_ = nh.createTimer(ros::Duration(1.0/cam_fps_), &ECameraPublisher::timerCallback, this);
 }
 
+void ECameraPublisher::undistortGPU()
+{
+  cv::initUndistortRectifyMap(K_, D_, cv::Mat(), K_,
+                              cv::Size(frame_.cols, frame_.rows),
+                              CV_32FC1, xmap_, ymap_);
+  // copy host mem to device
+  inputG_.upload(frame_);
+  xmapG_.upload(xmap_);
+  ymapG_.upload(ymap_);
+
+  cv::cuda::remap(inputG_, outputG_, xmapG_, ymapG_, cv::INTER_LINEAR);
+  bridge_.image = cv::Mat(outputG_);
+}
+
 void ECameraPublisher::timerCallback(const ros::TimerEvent& event)
 {
   if (!cap_.read(frame_))
@@ -74,14 +88,8 @@ void ECameraPublisher::timerCallback(const ros::TimerEvent& event)
   bridge_.header.stamp = ros::Time::now() - ros::Duration(cam_delay_);
   bridge_.header.frame_id = cam_frame_id_;
   // undistort image
-  cv::undistort(frame_, bridge_.image, K_, D_);
-  // TODO: switch to CUDA based undostortion
-  //cv::Mat m1, m2;
-  //cv::initUndistortRectifyMap(K_, D_, cv::Mat(), K_, cv::Size(frame_.cols, frame_.rows), CV_32FC1, m1, m2);
-  //cv::cuda::GpuMat map1(m1);
-  //cv::cuda::GpuMat map2(m2);
-  //cv::cuda::remap(frame_, bridge_.image, map1, map2, cv::INTER_LINEAR);
-
+  //cv::undistort(frame_, bridge_.image, K_, D_);
+  undistortGPU();
   // publish
   image_pub_.publish(*bridge_.toImageMsg());
 }
