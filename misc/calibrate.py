@@ -44,8 +44,8 @@ cv2.namedWindow("top", cv2.WINDOW_NORMAL)
 cv2.createTrackbar("C0", "top" , 250, 500, n)
 cv2.createTrackbar("C1", "top" , 0, 500, n)
 cv2.createTrackbar("T0", "top" , 0, 250, n)
-cv2.createTrackbar("T1", "top" , 60, 250, n)
-cv2.createTrackbar("T2", "top" , 730, 1000, n)
+cv2.createTrackbar("T1", "top" , 50, 250, n)
+cv2.createTrackbar("T2", "top" , 624, 1000, n)
 cv2.createTrackbar("pitch", "top" , 15, 30, n)
 while True:
     C0 = cv2.getTrackbarPos('C0','top')
@@ -74,11 +74,12 @@ while True:
     # Take inverted transformation
     H = np.linalg.inv(H)
 
-    frame = cv2.imread('1.png')
+    frame = cv2.imread('calib1.png')
     frame = cv2.resize(frame, (458,256))
     dst = cv2.warpPerspective(frame,H,(500, 500))
     cv2.line(dst,(250, 0),(250, 500),(255,0,0),1)
     cv2.imshow("top", dst)
+    cv2.imwrite("top.png", dst)
     if cv2.waitKey(100) & 0xFF == ord('q'): break
 
 cv2.imwrite("top.png", dst)
