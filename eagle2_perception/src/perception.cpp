@@ -80,6 +80,7 @@ EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh): it_(nh)
   cam_origin_x_ = cam_height_from_ground_*(fy_/v0_);
   cam_origin_y_ = (top2_width_/2)*top2_res_;
   bonnet_scale_ = min(float(bonnet::W)/cam_width_,float(bonnet::H)/cam_height_);
+  map_msg_.data.resize(top2_width_*top2_height_);
 
   if (do_viz_)
   {
@@ -324,7 +325,6 @@ void EPerception::imageCallback(const sensor_msgs::ImageConstPtr& msg)
   map_msg_.info.origin.orientation.y = 0.0;
   map_msg_.info.origin.orientation.z = -0.707;
   map_msg_.info.origin.orientation.w = 0.707;
-  map_msg_.data.reserve(top2_width_*top2_height_);
   uchar* p = top.data;
   for( int i = 0; i < top2_width_*top2_height_; ++i)
   {
