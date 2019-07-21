@@ -5,14 +5,11 @@
     <include file="$(find eagle2)/launch/include/vesc.xml"/>
   </group>
   <include file="$(find eagle2)/launch/include/teleop.xml"/>
-
   <!--
-
   <include file="$(find eagle2)/launch/include/static_tf.xml"/>
   <include file="$(find eagle2)/launch/include/lidar.xml"/>
-  <include file="$(find eagle2)/launch/include/imu.xml"/>
   <include file="$(find eagle2)/launch/include/gps.xml"/>
-
+  <include file="$(find eagle2)/launch/include/imu.xml"/>
   <node pkg="move_base" type="move_base" name="move_base" output="screen">
     <rosparam file="$(find eagle2)/cfg/navigation.yaml" command="load" />
   </node>

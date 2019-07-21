@@ -7,7 +7,7 @@ base_local_planner: "teb_local_planner/TebLocalPlannerROS"
 ### costmaps ###
 global_costmap:
   global_frame: map
-  robot_base_frame: camera
+  robot_base_frame: base_link
   update_frequency: 1.0
   publish_frequency: 0.5
   static_map: true
@@ -25,8 +25,8 @@ global_costmap:
     inflation_radius: 0.5
 
 local_costmap:
-  global_frame: map
-  robot_base_frame: camera
+  global_frame: odom
+  robot_base_frame: base_link
   update_frequency: 10.0
   publish_frequency: 5.0
   static_map: false
