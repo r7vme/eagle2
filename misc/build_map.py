@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import yaml
 import sys
+import signal
 import cv2
 import numpy as np
 import tf2_ros
@@ -29,7 +30,7 @@ gmap.info.origin.orientation.x=0.0
 gmap.info.origin.orientation.y=0.0
 gmap.info.origin.orientation.z=0.0
 gmap.info.origin.orientation.w=1.0
-gmap_data=np.full((1000,1000), 50, dtype=np.uint8)
+gmap_data=np.full((500,1000), 50, dtype=np.uint8)
 
 def logit(x):
   if x >= 100:
@@ -110,12 +111,21 @@ def on_grid(msg):
     occupancy_grid_mapping(gmap_data, update_data, M, pivot)
 
     # publish updated map
-    gmap.data=gmap_data.reshape(-1)
-    map_pub.publish(gmap)
+    #gmap.data=gmap_data.reshape(-1)
+    #map_pub.publish(gmap)
+
+def signal_handler(sig, frame):
+    print('Saving map to /tmp/map.png!')
+    img=gmap_data*(255/100) # scale color from 0..255
+    img=(255-img) # invert colors
+    img=cv2.flip(img, 0) # invert Y axis
+    cv2.imwrite("/tmp/map.png", img)
+    sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
 
 rospy.init_node('build_map')
 grid_sub=rospy.Subscriber("/drivable_area",OccupancyGrid,on_grid,queue_size=1)
-map_pub=rospy.Publisher("/map",OccupancyGrid)
+#map_pub=rospy.Publisher("/map",OccupancyGrid)
 tfBuffer=tf2_ros.Buffer()
 listener=tf2_ros.TransformListener(tfBuffer)
 rospy.spin()
