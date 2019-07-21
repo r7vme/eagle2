@@ -1,11 +1,13 @@
 <launch>
+  <include file="$(find eagle2_perception)/launch/eagle2_perception_nodelet.launch"/>
+  <include file="$(find eagle2)/launch/include/orb_slam.xml"/>
+  <node name="map_server" pkg="map_server" type="map_server"
+    args="$(find eagle2)/cfg/map.yaml" output="screen" respawn="true" />
   <!--
-  -->
   <group ns="vesc">
     <include file="$(find eagle2)/launch/include/vesc.xml"/>
   </group>
   <include file="$(find eagle2)/launch/include/teleop.xml"/>
-  <!--
   <include file="$(find eagle2)/launch/include/static_tf.xml"/>
   <include file="$(find eagle2)/launch/include/lidar.xml"/>
   <include file="$(find eagle2)/launch/include/gps.xml"/>
@@ -13,8 +15,6 @@
   <node pkg="move_base" type="move_base" name="move_base" output="screen">
     <rosparam file="$(find eagle2)/cfg/navigation.yaml" command="load" />
   </node>
-  <node name="map_server" pkg="map_server" type="map_server"
-    args="$(find eagle2)/cfg/map.yaml" output="screen" respawn="true" />
 
   <node pkg="teb_local_planner" type="cmd_vel_to_ackermann_drive.py" name="cmd_vel_to_ackermann_drive" output="screen" respawn="true">
     <param name="twist_cmd_topic" value="cmd_vel"/>
