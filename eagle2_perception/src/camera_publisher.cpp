@@ -60,19 +60,20 @@ ECameraPublisher::ECameraPublisher(ros::NodeHandle nh, ros::NodeHandle priv_nh):
   // only from 4.2
   // cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
 
+  // compute undistort rectify map only once
+  cv::initUndistortRectifyMap(K_, D_, cv::Mat(), K_,
+                              cv::Size(cam_width_, cam_height_),
+                              CV_32FC1, xmap_, ymap_);
+  xmapG_.upload(xmap_);
+  ymapG_.upload(ymap_);
+
   timer_ = nh.createTimer(ros::Duration(1.0/cam_fps_), &ECameraPublisher::timerCallback, this);
 }
 
 void ECameraPublisher::undistortGPU()
 {
-  cv::initUndistortRectifyMap(K_, D_, cv::Mat(), K_,
-                              cv::Size(frame_.cols, frame_.rows),
-                              CV_32FC1, xmap_, ymap_);
   // copy host mem to device
   inputG_.upload(frame_);
-  xmapG_.upload(xmap_);
-  ymapG_.upload(ymap_);
-
   cv::cuda::remap(inputG_, outputG_, xmapG_, ymapG_, cv::INTER_LINEAR);
   bridge_.image = cv::Mat(outputG_);
 }
@@ -88,7 +89,6 @@ void ECameraPublisher::timerCallback(const ros::TimerEvent& event)
   bridge_.header.stamp = ros::Time::now() - ros::Duration(cam_delay_);
   bridge_.header.frame_id = cam_frame_id_;
   // undistort image
-  //cv::undistort(frame_, bridge_.image, K_, D_);
   undistortGPU();
   // publish
   image_pub_.publish(*bridge_.toImageMsg());
