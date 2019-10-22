@@ -13,6 +13,8 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
 #include <jsk_recognition_msgs/BoundingBox.h>
+#include <khmot_msgs/BoundingBoxWithCovarianceArray.h>
+#include <khmot_msgs/BoundingBoxWithCovariance.h>
 
 #include "perception.hpp"
 #include "bonnet.hpp"
@@ -29,7 +31,7 @@ EPerception::EPerception(ros::NodeHandle nh, ros::NodeHandle priv_nh): it_(nh)
   priv_nh.param<string>("config_file", config_file_, "config.yaml");
 
   map_pub_   = nh.advertise<nav_msgs::OccupancyGrid>("drivable_area", 1);
-  bbox_pub_  = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("bboxes", 1);
+  bbox_pub_  = nh.advertise<khmot_msgs::BoundingBoxWithCovarianceArray>("observations", 1);
 
   YAML::Node config;
   try
@@ -296,7 +298,7 @@ void EPerception::imageCallback(const sensor_msgs::ImageConstPtr& msg)
   // bonnet
   bonnet_net_->doInference(frame, bonnet_output_);
 
-  jsk_recognition_msgs::BoundingBoxArray bbox_arr_msg;
+  khmot_msgs::BoundingBoxWithCovarianceArray bbox_arr_msg;
   bbox_arr_msg.header.stamp = frame_stamp;
   bbox_arr_msg.header.frame_id = cam_frame_id_;
 
@@ -345,7 +347,7 @@ void EPerception::imageCallback(const sensor_msgs::ImageConstPtr& msg)
 
   for(const auto& bbox3d: bboxes3d)
   {
-    jsk_recognition_msgs::BoundingBox bbox_msg;
+    khmot_msgs::BoundingBoxWithCovariance bbox_msg;
     bbox_msg.header.stamp = frame_stamp;
     bbox_msg.header.frame_id = cam_frame_id_;
     bbox_msg.label = bbox3d.label;
@@ -354,19 +356,22 @@ void EPerception::imageCallback(const sensor_msgs::ImageConstPtr& msg)
     bbox_msg.dimensions.z = bbox3d.h;
     tf2::Quaternion q;
     q.setRPY(0,0,-bbox3d.yaw); // invert yaw
-    bbox_msg.pose.orientation.x = q[0];
-    bbox_msg.pose.orientation.y = q[1];
-    bbox_msg.pose.orientation.z = q[2];
-    bbox_msg.pose.orientation.w = q[3];
+    bbox_msg.pose.pose.orientation.x = q[0];
+    bbox_msg.pose.pose.orientation.y = q[1];
+    bbox_msg.pose.pose.orientation.z = q[2];
+    bbox_msg.pose.pose.orientation.w = q[3];
     tuple<int,int> coords = reproject_to_ground(bbox3d.proj_center_x*bonnet_scale_,
                                                 bbox3d.proj_center_y*bonnet_scale_, H_);
     // x axis in ros is (img_height-y axis) in image
     // y axis in ros is -x axis in image
     int x = ((top_height_ - get<1>(coords)) * top_res_) + cam_origin_x_;
     int y = (-get<0>(coords) * top_res_) + cam_origin_y_;
-    bbox_msg.pose.position.x = x;
-    bbox_msg.pose.position.y = y;
-    bbox_msg.pose.position.z = bbox3d.h/2;
+    bbox_msg.pose.pose.position.x = x;
+    bbox_msg.pose.pose.position.y = y;
+    bbox_msg.pose.pose.position.z = bbox3d.h/2;
+    bbox_msg.pose.covariance[0] = VARIANCE_XX;
+    bbox_msg.pose.covariance[7] = VARIANCE_YY;
+    bbox_msg.pose.covariance[35] = VARIANCE_YawYaw;
     bbox_msg.value = 0;
     bbox_arr_msg.boxes.push_back(bbox_msg);
   }

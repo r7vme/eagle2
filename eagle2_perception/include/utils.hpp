@@ -11,6 +11,10 @@ using namespace Eigen;
 
 namespace perception
 {
+  const double VARIANCE_XX = 1.0; // 1m st.deviation
+  const double VARIANCE_YY = 1.0; // 1m st.deviation
+  const double VARIANCE_YawYaw = 0.25; // ~30 degrees st.deviation
+
   const int ROAD_THRESH=70;
   // box3d
   typedef Matrix<float,8,3> Points3D;

@@ -15,6 +15,7 @@
   <depend>cv_bridge</depend>
   <depend>image_transport</depend>
   <depend>jsk_recognition_msgs</depend>
+  <depend>khmot_msgs</depend>
   <export>
     <nodelet plugin="${prefix}/eagle2_perception_nodelet.xml"/>
   </export>
